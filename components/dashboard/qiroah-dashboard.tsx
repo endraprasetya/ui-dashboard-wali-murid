@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { GraduationCap } from 'lucide-react'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import { STANDAR_TARGET_QIROAH, progresTargetQiroah } from '@/lib/qiroah-target'
-import { adaIsiTugas } from '@/lib/tugas-status'
+import { adaIsiTugas, dahulukanBelumDikerjakan } from '@/lib/tugas-status'
 import type { QiroahData } from '@/lib/queries'
 import { ModuleMessage } from './module-message'
 
@@ -28,8 +28,17 @@ export function QiroahDashboard({
   const [semuaRiwayat, setSemuaRiwayat] = useState(false)
   const capaian = data.latest ? `${data.latest.jilid} ${data.latest.halaman}` : ''
   const progres = progresTargetQiroah(kelas, capaian)
-  const riwayat = semuaRiwayat ? data.recent : data.recent.slice(0, 5)
-  const tugas = data.recent.filter((row) => adaIsiTugas(row.tugas))
+  const riwayat = semuaRiwayat ? data.recent : data.recent.slice(0, 6)
+  const tugas = dahulukanBelumDikerjakan(
+    data.recent
+      .filter((row) => adaIsiTugas(row.tugas))
+      .map((row) => ({
+        id: row.id,
+        tanggal: row.date,
+        tugas: row.tugas,
+        status: row.statusSetoran,
+      })),
+  )
 
   return (
     <section id="qiroah" className="scroll-mt-20 space-y-4">
@@ -123,7 +132,7 @@ export function QiroahDashboard({
                 </tbody>
               </table>
             </div>
-            {data.recent.length > 5 && (
+            {data.recent.length > 6 && (
               <button type="button" onClick={() => setSemuaRiwayat((buka) => !buka)} className="mt-3 text-sm font-bold text-primary">
                 {semuaRiwayat ? 'Tampilkan lebih sedikit' : 'Lihat Selengkapnya'}
               </button>
@@ -138,16 +147,7 @@ export function QiroahDashboard({
           <p className="mt-3 text-sm text-muted-foreground">Belum ada tugas rumah untuk siswa ini.</p>
         ) : (
           <div className="mt-4">
-            <TabelTugasRumah
-              jenis="qiroah"
-              batas={6}
-              baris={tugas.map((row) => ({
-                id: row.id,
-                tanggal: row.date,
-                tugas: row.tugas,
-                status: row.statusSetoran,
-              }))}
-            />
+            <TabelTugasRumah jenis="qiroah" batas={6} baris={tugas} />
           </div>
         )}
       </article>

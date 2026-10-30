@@ -2,7 +2,7 @@ import { BookHeart } from 'lucide-react'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import { statusClass, surahArabic } from '@/lib/format'
 import type { TahfidzData } from '@/lib/queries'
-import { adaIsiTugas } from '@/lib/tugas-status'
+import { adaIsiTugas, dahulukanBelumDikerjakan } from '@/lib/tugas-status'
 import { cn } from '@/lib/utils'
 import { DashboardCard } from './dashboard-card'
 import { ModuleMessage } from './module-message'
@@ -11,7 +11,16 @@ export function TahfidzCard({ data, error }: { data: TahfidzData; error: string 
   const latest = data.latest
   const progress = data.total === 0 ? 0 : Math.round((data.lancar / data.total) * 100)
   const arabic = latest ? surahArabic(latest.surah) : null
-  const tugas = data.history.filter((row) => adaIsiTugas(row.tugas))
+  const tugas = dahulukanBelumDikerjakan(
+    data.history
+      .filter((row) => adaIsiTugas(row.tugas))
+      .map((row) => ({
+        id: row.id,
+        tanggal: row.date,
+        tugas: row.tugas,
+        status: row.konfirmasi,
+      })),
+  )
 
   return (
     <DashboardCard
@@ -91,16 +100,7 @@ export function TahfidzCard({ data, error }: { data: TahfidzData; error: string 
           <p className="mt-2 text-sm text-muted-foreground">Belum ada tugas rumah untuk siswa ini.</p>
         ) : (
           <div className="mt-3">
-            <TabelTugasRumah
-              jenis="tahfidz"
-              batas={6}
-              baris={tugas.map((row) => ({
-                id: row.id,
-                tanggal: row.date,
-                tugas: row.tugas,
-                status: row.konfirmasi,
-              }))}
-            />
+            <TabelTugasRumah jenis="tahfidz" batas={6} baris={tugas} />
           </div>
         )}
       </div>

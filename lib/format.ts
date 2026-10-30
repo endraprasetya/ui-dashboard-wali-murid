@@ -82,12 +82,21 @@ export function todayLabel() {
 }
 
 export function todayIso() {
+  return isoFromTime(Date.now())
+}
+
+export function isoDate(value: unknown) {
+  const time = dateValue(value)
+  return time ? isoFromTime(time) : ''
+}
+
+function isoFromTime(time: number) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jakarta',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date())
+  }).format(new Date(time))
 }
 
 export function displayValue(value: unknown) {

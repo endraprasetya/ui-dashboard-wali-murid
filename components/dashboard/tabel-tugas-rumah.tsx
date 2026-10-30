@@ -8,10 +8,12 @@ export function TabelTugasRumah({
   baris,
   jenis,
   batas,
+  konfirmasiAktif = true,
 }: {
   baris: { id: string; tanggal: string; tugas: string; status: string }[]
   jenis: 'qiroah' | 'tahfidz'
   batas?: number
+  konfirmasiAktif?: boolean
 }) {
   const [semua, setSemua] = useState(false)
   const [dikonfirmasi, setDikonfirmasi] = useState<Record<string, true>>({})
@@ -44,6 +46,7 @@ export function TabelTugasRumah({
                     id={row.id}
                     selesai={selesai}
                     jenis={jenis}
+                    nonaktif={!konfirmasiAktif}
                     onBerhasil={() => setDikonfirmasi((sekarang) => ({ ...sekarang, [row.id]: true }))}
                   />
                 </div>

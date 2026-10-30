@@ -73,7 +73,7 @@ export function KotakRingkas({
   if (href && pisahTautan) {
     return (
       <article className={kelas}>
-        <Link href={href} className="group block rounded-2xl outline-offset-4">
+        <Link href={href} className="group block rounded-2xl text-inherit outline-offset-4">
           {kepala}
         </Link>
         {tubuh}
@@ -91,9 +91,11 @@ export function KotakRingkas({
   }
 
   return (
-    <Link href={href} className={kelas}>
-      {kepala}
-      {tubuh}
-    </Link>
+    <article className={kelas}>
+      <Link href={href} className="group block rounded-2xl text-inherit outline-offset-4">
+        {kepala}
+        {tubuh}
+      </Link>
+    </article>
   )
 }

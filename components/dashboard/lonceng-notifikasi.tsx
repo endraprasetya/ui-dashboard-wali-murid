@@ -66,9 +66,12 @@ export function LoncengNotifikasi({ item }: { item: ButirNotifikasi[] }) {
             return !terbuka
           })
         }}
-        className="relative inline-flex size-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="relative inline-flex size-9 items-center justify-center overflow-visible rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <Bell className="size-4" aria-hidden="true" />
+        {jumlah > 0 ? (
+          <span className="lonceng-denyut pointer-events-none absolute right-1 top-1 size-3 rounded-full bg-red-500" aria-hidden="true" />
+        ) : null}
+        <Bell className={jumlah > 0 ? 'lonceng-goyang size-4' : 'size-4'} aria-hidden="true" />
         {jumlah > 0 ? (
           <span className="absolute right-0.5 top-0.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white">
             {jumlah > 9 ? '9+' : jumlah}

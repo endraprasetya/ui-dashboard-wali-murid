@@ -7,6 +7,7 @@ import {
   displayValue,
   formatDisplayDate,
   formatMonthLabel,
+  isoDate,
   text,
   todayIso,
 } from '@/lib/format'
@@ -71,10 +72,12 @@ export type QiroahData = {
 export type JurnalEntry = {
   id: string
   date: string
+  iso: string
   mapel: string
   materi: string
   kegiatan: string
   jam: string
+  guru: string
   semester: string
   hadir: string
   tidakHadir: string
@@ -103,6 +106,7 @@ export type TertibEntry = {
   points: number
   teacher: string
   month: string
+  keterangan: string
 }
 
 export type TertibData = {
@@ -208,24 +212,65 @@ function shortStatus(status: string, note: string) {
   return status ? 'Catatan' : '-'
 }
 
+function bacaanTahfidz(row: Record<string, unknown>) {
+  const ziyadah = text(row.hafalan_baru) || text(row.surah) || text(row.surah_ziyadah)
+  const murojaah = text(row.murojaah) || [text(row.surah_murojaah), text(row.ayat_murojaah)].filter(Boolean).join(' ')
+  if (ziyadah && murojaah) return `${ziyadah} · murojaah ${murojaah}`
+  return ziyadah || murojaah || '-'
+}
+
+function ayatTahfidz(row: Record<string, unknown>) {
+  const mulai = text(row.ayat_mulai) || text(row.ayat_ziyadah)
+  const selesai = text(row.ayat_selesai)
+  if (mulai || selesai) return `${mulai || '…'} – ${selesai || mulai}`
+  return text(row.ayat_murojaah) || '-'
+}
+
+function jenisTahfidz(row: Record<string, unknown>) {
+  const tipe = text(row.tipe_tugas)
+  if (tipe) return tipe
+  const ziyadah = Boolean(text(row.hafalan_baru) || text(row.surah) || text(row.surah_ziyadah))
+  const murojaah = Boolean(text(row.murojaah) || text(row.surah_murojaah))
+  if (ziyadah && murojaah) return 'Ziyadah & Murojaah'
+  if (murojaah) return 'Murojaah'
+  if (ziyadah) return 'Ziyadah'
+  return '-'
+}
+
+function tugasTahfidz(row: Record<string, unknown>) {
+  const rumah = text(row.tugas_rumah)
+  if (rumah) {
+    const ziyadah = /ziyadah aktif/i.test(rumah)
+    const murojaah = /murojaah aktif/i.test(rumah)
+    if (ziyadah || murojaah) {
+      const bagian = [ziyadah ? 'Ziyadah' : '', murojaah ? 'Murojaah' : ''].filter(Boolean).join(' & ')
+      const sisa = rumah.replace(/\[?\s*(ziyadah|murojaah)\s+aktif\s*\]?/gi, ' ').replace(/\s+/g, ' ').trim()
+      return sisa ? `${bagian} · ${sisa}` : bagian
+    }
+    return rumah
+  }
+  const surah = text(row.surah_tugas)
+  const mulai = text(row.ayat_mulai_tugas)
+  const selesai = text(row.ayat_selesai_tugas)
+  if (!surah && !mulai && !selesai) return ''
+  const rentang = mulai && selesai ? `${mulai}–${selesai}` : mulai || selesai
+  return [surah, rentang].filter(Boolean).join(' ')
+}
+
 function toTahfidz(row: Record<string, unknown>, index: number): TahfidzEntry {
-  const start = text(row.ayat_mulai)
-  const end = text(row.ayat_selesai)
-  const ayat = start || end ? `${start || '…'} – ${end || '…'}` : '-'
   const note = text(row.keterangan_pesan_hafalan) || text(row.keterangan)
   const status = shortStatus(text(row.status), note)
-  const review = text(row["muroja'ah"])
 
   return {
     id: text(row.id_setoran) || `tahfidz-${index}`,
     date: formatDisplayDate(row.tanggal),
-    surah: text(row.surah) || text(row.hafalan_baru) || review || '-',
-    ayat,
-    type: text(row.tipe_tugas) || '-',
+    surah: bacaanTahfidz(row),
+    ayat: ayatTahfidz(row),
+    type: jenisTahfidz(row),
     status,
     note,
     ustadz: text(row.nama_ustadz) || '-',
-    tugas: text(row.tugas_rumah),
+    tugas: tugasTahfidz(row),
     konfirmasi: text(row.konfirmasi_ortu),
   }
 }
@@ -249,10 +294,12 @@ function toJurnal(row: Record<string, unknown>, index: number): JurnalEntry {
   return {
     id: text(row.id) || `jurnal-${index}`,
     date: formatDisplayDate(row.tanggal),
+    iso: isoDate(row.tanggal),
     mapel: text(row.mapel) || 'Pembelajaran',
     materi: text(row.materi),
     kegiatan: text(row.kegiatan),
     jam: text(row.jam) || '-',
+    guru: text(row.guru) || text(row.nama_guru) || text(row.nama_ustadz),
     semester: text(row.semester),
     hadir: displayValue(row.hadir),
     tidakHadir: displayValue(row.tidak_hadir),
@@ -319,9 +366,10 @@ export async function getTahfidz(idSiswa: string): Promise<QueryResult<TahfidzDa
   const { data, error } = await supabase
     .from('setoran_tahfidz')
     .select(
-      'id_setoran, tanggal, id_siswa, hafalan_baru, "muroja\'ah", keterangan_pesan_hafalan, keterangan, tugas_rumah, nama_ustadz, surah, ayat_mulai, ayat_selesai, status, tipe_tugas, konfirmasi_ortu',
+      'id_setoran, tanggal, id_siswa, hafalan_baru, murojaah, keterangan_pesan_hafalan, keterangan, tugas_rumah, nama_ustadz, surah, ayat_mulai, ayat_selesai, status, tipe_tugas, konfirmasi_ortu, surah_ziyadah, ayat_ziyadah, surah_murojaah, ayat_murojaah, surah_tugas, ayat_mulai_tugas, ayat_selesai_tugas',
     )
     .eq('id_siswa', idSiswa)
+    .order('tanggal', { ascending: false })
     .limit(200)
 
   if (error) {
@@ -382,7 +430,8 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
     .from('jurnal_pembelajaran')
     .select('id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir')
     .eq('kelas', className)
-    .limit(40)
+    .order('tanggal', { ascending: false })
+    .limit(240)
 
   if (error) {
     logQueryError('jurnal', error)
@@ -459,7 +508,7 @@ export async function getTertib(idSiswa: string): Promise<QueryResult<TertibData
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('tertib_point')
-    .select('id_tertib_point, id_siswa, label, pts, guru, bulan, created_at')
+    .select('id_tertib_point, id_siswa, label, pts, guru, bulan, keterangan, created_at')
     .eq('id_siswa', idSiswa)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -475,6 +524,7 @@ export async function getTertib(idSiswa: string): Promise<QueryResult<TertibData
     points: Number(row.pts) || 0,
     teacher: text(row.guru) || '-',
     month: formatMonthLabel(row.bulan) !== '-' ? formatMonthLabel(row.bulan) : formatDisplayDate(row.created_at),
+    keterangan: text(row.keterangan),
   }))
 
   const total = items.reduce((sum, item) => sum + item.points, 0)

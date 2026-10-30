@@ -3,10 +3,18 @@ import { BookHeart, CalendarCheck, GraduationCap, NotebookPen, ShieldCheck, User
 import { KotakRingkas } from '@/components/dashboard/kotak-ringkas'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import type { HasilDataDiri } from '@/lib/data-diri'
-import type { DashboardData, JurnalEntry, TahfidzEntry, TertibEntry } from '@/lib/queries'
-import { adaIsiTugas } from '@/lib/tugas-status'
+import type { DashboardData, JurnalEntry, TertibEntry } from '@/lib/queries'
+import { adaIsiTugas, dahulukanBelumDikerjakan, sudahDikonfirmasi } from '@/lib/tugas-status'
 
-const MENU_KEUANGAN = ['SPP', 'Buku', 'Ekstrakurikuler', 'ASTS 1', 'ASAS', 'ASTS 2', 'ASAT', 'Daftar ulang']
+type RingkasKeuangan = {
+  error: string | null
+  ringkas: { terbayar: number; belumTerbayar: number }
+  tagihan: { keterangan: string; jumlah: number }[]
+}
+
+function rupiah(nilai: number) {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(nilai)
+}
 
 function Baris({ kiri, kanan }: { kiri: string; kanan: string }) {
   return (
@@ -25,14 +33,42 @@ function JudulBagian({ children }: { children: string }) {
   return <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">{children}</p>
 }
 
-export function BerandaRingkas({ data, diri }: { data: DashboardData; diri: HasilDataDiri }) {
+function tugasTerbuka(baris: { id: string; tanggal: string; tugas: string; status: string }[]) {
+  const urut = dahulukanBelumDikerjakan(baris.filter((row) => adaIsiTugas(row.tugas)))
+  const pertama = urut[0]
+  return pertama && !sudahDikonfirmasi(pertama.status) ? pertama : null
+}
+
+export function BerandaRingkas({
+  data,
+  diri,
+  keuangan = null,
+}: {
+  data: DashboardData
+  diri: HasilDataDiri
+  keuangan?: RingkasKeuangan | null
+}) {
   const siswa = data.student
   if (!siswa) return null
 
-  const riwayatQiroah = data.qiroah.data.recent.slice(0, 3)
-  const tugasQiroah = data.qiroah.data.recent.filter((row) => adaIsiTugas(row.tugas))
-  const riwayatTahfidz = data.tahfidz.data.history.slice(0, 6)
-  const tugasTahfidz = data.tahfidz.data.history.filter((row) => adaIsiTugas(row.tugas))
+  const setoranQiroah = data.qiroah.data.recent[0] ?? null
+  const tugasQiroah = tugasTerbuka(
+    data.qiroah.data.recent.map((row) => ({
+      id: row.id,
+      tanggal: row.date,
+      tugas: row.tugas,
+      status: row.statusSetoran,
+    })),
+  )
+  const setoranTahfidz = data.tahfidz.data.history[0] ?? null
+  const tugasTahfidz = tugasTerbuka(
+    data.tahfidz.data.history.map((row) => ({
+      id: row.id,
+      tanggal: row.date,
+      tugas: row.tugas,
+      status: row.konfirmasi,
+    })),
+  )
   const jurnal = data.jurnal.data.slice(0, 3)
   const tertib = data.tertib.data.items.slice(0, 3)
   const absensi = data.absensi.data
@@ -45,36 +81,28 @@ export function BerandaRingkas({ data, diri }: { data: DashboardData; diri: Hasi
         ) : (
           <div className="space-y-3">
             <div>
-              <JudulBagian>3 riwayat terakhir</JudulBagian>
-              {riwayatQiroah.length === 0 ? (
-                <Kosong teks="Belum ada setoran." />
-              ) : (
+              <JudulBagian>Riwayat setoran terakhir</JudulBagian>
+              {setoranQiroah ? (
                 <ul>
-                  {riwayatQiroah.map((row) => (
-                    <Baris key={row.id} kiri={`${row.jilid} · hal. ${row.halaman}`} kanan={row.date} />
-                  ))}
+                  <Baris kiri={`${setoranQiroah.jilid} · hal. ${setoranQiroah.halaman}`} kanan={setoranQiroah.date} />
                 </ul>
+              ) : (
+                <Kosong teks="Belum ada setoran." />
               )}
             </div>
             <div className="min-w-0 rounded-2xl bg-white p-3 text-slate-900">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tugas rumah</p>
-              {tugasQiroah.length === 0 ? (
-                <Kosong teks="Belum ada tugas rumah." />
-              ) : (
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tugas belum dikerjakan</p>
+              {tugasQiroah ? (
                 <div className="mt-2">
-                  <TabelTugasRumah
-                    jenis="qiroah"
-                    batas={6}
-                    baris={tugasQiroah.map((row) => ({
-                      id: row.id,
-                      tanggal: row.date,
-                      tugas: row.tugas,
-                      status: row.statusSetoran,
-                    }))}
-                  />
+                  <TabelTugasRumah jenis="qiroah" batas={1} baris={[tugasQiroah]} konfirmasiAktif={false} />
                 </div>
+              ) : (
+                <p className="py-1 text-xs text-slate-500">Tidak ada tugas yang belum dikerjakan.</p>
               )}
             </div>
+            <Link href="/qiroah" className="tombol-buka inline-flex items-center rounded-xl px-3.5 py-2 text-xs font-bold">
+              Buka halaman Qiroah
+            </Link>
           </div>
         )}
       </KotakRingkas>
@@ -85,39 +113,31 @@ export function BerandaRingkas({ data, diri }: { data: DashboardData; diri: Hasi
         ) : (
           <div className="space-y-3">
             <div>
-              <JudulBagian>6 riwayat terakhir</JudulBagian>
-              {riwayatTahfidz.length === 0 ? (
-                <Kosong teks="Belum ada setoran tahfidz." />
-              ) : (
+              <JudulBagian>Riwayat setoran terakhir</JudulBagian>
+              {setoranTahfidz ? (
                 <ul>
-                  {riwayatTahfidz.map((row: TahfidzEntry) => (
-                    <Baris key={row.id} kiri={`${row.surah} · ayat ${row.ayat}`} kanan={row.date} />
-                  ))}
+                  <Baris
+                    kiri={`${setoranTahfidz.surah} · ayat ${setoranTahfidz.ayat}`}
+                    kanan={setoranTahfidz.date}
+                  />
                 </ul>
+              ) : (
+                <Kosong teks="Belum ada setoran tahfidz." />
               )}
-              <Link href="/tahfidz#riwayat-hafalan" className="mt-2 inline-block text-sm font-bold text-white underline">
-                Lihat Selengkapnya
-              </Link>
             </div>
             <div className="min-w-0 rounded-2xl bg-white p-3 text-slate-900">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tugas rumah</p>
-              {tugasTahfidz.length === 0 ? (
-                <p className="py-1 text-xs text-slate-500">Belum ada tugas rumah.</p>
-              ) : (
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tugas belum dikerjakan</p>
+              {tugasTahfidz ? (
                 <div className="mt-2">
-                  <TabelTugasRumah
-                    jenis="tahfidz"
-                    batas={6}
-                    baris={tugasTahfidz.map((row) => ({
-                      id: row.id,
-                      tanggal: row.date,
-                      tugas: row.tugas,
-                      status: row.konfirmasi,
-                    }))}
-                  />
+                  <TabelTugasRumah jenis="tahfidz" batas={1} baris={[tugasTahfidz]} konfirmasiAktif={false} />
                 </div>
+              ) : (
+                <p className="py-1 text-xs text-slate-500">Tidak ada tugas yang belum dikerjakan.</p>
               )}
             </div>
+            <Link href="/tahfidz" className="tombol-buka inline-flex items-center rounded-xl px-3.5 py-2 text-xs font-bold">
+              Buka halaman Tahfidz
+            </Link>
           </div>
         )}
       </KotakRingkas>
@@ -139,60 +159,68 @@ export function BerandaRingkas({ data, diri }: { data: DashboardData; diri: Hasi
         )}
       </KotakRingkas>
 
-      <KotakRingkas href="/profil" judul="Profil Anak" ikon={UserRound} nada="indigo">
-        {diri.error ? (
-          <Kosong teks={diri.error} />
-        ) : !diri.data ? (
-          <Kosong teks="Buku induk belum tertaut dengan akun ini." />
-        ) : (
-          <ul>
-            <Baris kiri={diri.data.nama_lengkap || siswa.name} kanan={`Kelas ${diri.data.kelas || siswa.kelas || '-'}`} />
-            <Baris kiri="Nomor induk" kanan={String(diri.data.nomor_induk_sekolah || '-')} />
-            <Baris
-              kiri="Kelengkapan data"
-              kanan={diri.kurang.length === 0 ? 'Lengkap' : `${diri.kurang.length} belum diisi`}
-            />
-          </ul>
-        )}
+      <KotakRingkas href="/profil" judul="Profil Siswa" ikon={UserRound} nada="indigo" className="kartu-profil">
+        <div className="isi-kartu rounded-2xl p-3 shadow-sm">
+          {diri.error ? (
+            <p className="py-1 text-xs text-slate-600">{diri.error}</p>
+          ) : !diri.data ? (
+            <p className="py-1 text-xs text-slate-600">Buku induk belum tertaut dengan akun ini.</p>
+          ) : (
+            <ul>
+              <Baris kiri={diri.data.nama_lengkap || siswa.name} kanan={`Kelas ${diri.data.kelas || siswa.kelas || '-'}`} />
+              <Baris kiri="Nomor induk" kanan={String(diri.data.nomor_induk_sekolah || siswa.nis || '-')} />
+              <Baris kiri="Unit" kanan={siswa.unit || '-'} />
+              <Baris
+                kiri="Kelengkapan data"
+                kanan={diri.kurang.length === 0 ? 'Lengkap' : `${diri.kurang.length} belum diisi`}
+              />
+            </ul>
+          )}
+        </div>
       </KotakRingkas>
 
-      <KotakRingkas href="/tertib" judul="Tertib Point" ikon={ShieldCheck} nada="rose">
-        {data.tertib.error ? (
-          <Kosong teks={data.tertib.error} />
-        ) : (
-          <div>
-            <p className="text-xs opacity-90">
-              Saldo poin{' '}
-              <span className="font-bold">
-                {data.tertib.data.total > 0 ? `+${data.tertib.data.total}` : data.tertib.data.total}
-              </span>
-            </p>
-            {tertib.length === 0 ? (
-              <Kosong teks="Belum ada catatan poin." />
-            ) : (
-              <ul className="mt-1">
-                {tertib.map((row: TertibEntry) => (
-                  <Baris
-                    key={row.id}
-                    kiri={row.label}
-                    kanan={row.points > 0 ? `+${row.points}` : String(row.points)}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+      <KotakRingkas href="/tertib" judul="Rekap Tertib Point" ikon={ShieldCheck} nada="rose" className="kartu-tertib">
+        <div className="isi-kartu rounded-2xl p-3 shadow-sm">
+          {data.tertib.error ? (
+            <p className="py-1 text-xs text-slate-600">{data.tertib.error}</p>
+          ) : (
+            <div>
+              <p className="text-xs text-slate-600">
+                Saldo poin{' '}
+                <span className="font-bold text-slate-900">
+                  {data.tertib.data.total > 0 ? `+${data.tertib.data.total}` : data.tertib.data.total}
+                </span>
+              </p>
+              {tertib.length === 0 ? (
+                <p className="py-1 text-xs text-slate-600">Belum ada catatan poin.</p>
+              ) : (
+                <ul className="mt-1">
+                  {tertib.map((row: TertibEntry) => (
+                    <Baris
+                      key={row.id}
+                      kiri={row.keterangan ? `${row.label} · ${row.keterangan}` : row.label}
+                      kanan={row.points > 0 ? `+${row.points}` : String(row.points)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       </KotakRingkas>
 
-      <KotakRingkas href="/keuangan" judul="Keuangan" ikon={Wallet} nada="teal">
-        <p className="text-xs opacity-90">Tagihan belum dibayar dan riwayat pembayaran dari AMPSS.</p>
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {MENU_KEUANGAN.map((item) => (
-            <li key={item} className="rounded-full bg-black/10 px-2.5 py-1 text-[11px] font-semibold">
-              {item}
-            </li>
-          ))}
-        </ul>
+      <KotakRingkas href="/keuangan" judul="Informasi Keuangan" ikon={Wallet} nada="teal" className="kartu-keuangan">
+        <div className="isi-kartu rounded-2xl p-3 shadow-sm">
+          <p className="text-sm font-medium leading-relaxed">
+            Informasi administrasi SPP, Daftar Ulang PSB, Ujian, Ekstrakurikuler, Buku Paket dan lainnya
+          </p>
+          {keuangan && !keuangan.error ? (
+            <ul className="mt-2 border-t border-slate-200 pt-1">
+              <Baris kiri="Belum terbayar" kanan={rupiah(keuangan.ringkas.belumTerbayar)} />
+              <Baris kiri="Sudah terbayar" kanan={rupiah(keuangan.ringkas.terbayar)} />
+            </ul>
+          ) : null}
+        </div>
       </KotakRingkas>
 
       <KotakRingkas judul={`Presensi ${absensi.monthLabel}`} ikon={CalendarCheck} nada="slate" className="md:col-span-2">

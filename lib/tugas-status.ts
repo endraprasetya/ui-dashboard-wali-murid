@@ -17,3 +17,13 @@ export function sudahDikonfirmasi(status: string) {
 export function labelStatusTugas(status: string) {
   return sudahDikonfirmasi(status) ? 'Sudah Dikerjakan' : 'Belum'
 }
+
+export function dahulukanBelumDikerjakan<T extends { status: string }>(baris: T[]) {
+  const belum: T[] = []
+  const sudah: T[] = []
+  for (const row of baris) {
+    if (sudahDikonfirmasi(row.status)) sudah.push(row)
+    else belum.push(row)
+  }
+  return [...belum, ...sudah]
+}
