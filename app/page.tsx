@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/" notifikasi={notifikasi}>
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} />
       <GreetingHero student={dashboard.student} />
-      <UjianBanner jadwal={dashboard.jadwalUjian} />
+      <UjianBanner jadwal={dashboard.jadwalUjian} hasil={dashboard.hasilUjian} />
       <BerandaRingkas data={dashboard} diri={diri} keuangan={keuangan} />
     </PortalKerangka>
   )

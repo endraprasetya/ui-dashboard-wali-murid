@@ -1,10 +1,39 @@
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, ScrollText } from 'lucide-react'
 import { formatDisplayDate } from '@/lib/format'
-import type { JadwalUjian } from '@/lib/queries'
+import type { HasilUjianJilid, JadwalUjian } from '@/lib/queries'
 
-export function UjianBanner({ jadwal }: { jadwal: JadwalUjian | null }) {
-  if (!jadwal) return null
+function lulusUjian(keputusan: string) {
+  const teks = keputusan.toLowerCase()
+  return teks.includes('lulus') && !teks.includes('tidak')
+}
 
+function KartuHasil({ hasil }: { hasil: HasilUjianJilid }) {
+  const lulus = lulusUjian(hasil.keputusan)
+  return (
+    <section className={`rounded-2xl border px-5 py-4 shadow-sm ${lulus ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${lulus ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+          <ScrollText className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-foreground">Hasil ujian kenaikan jilid</p>
+          <p className="mt-1 text-sm leading-relaxed text-foreground">
+            Ujian {hasil.jilidAsal}
+            {hasil.jilidTujuan ? ` menuju ${hasil.jilidTujuan}` : ''} dinyatakan <strong>{hasil.keputusan}</strong>
+            {hasil.predikat ? ` dengan predikat ${hasil.predikat}` : ''}
+            {hasil.nilai ? ` (nilai ${hasil.nilai})` : ''}.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {hasil.tanggal ? formatDisplayDate(hasil.tanggal) : 'Tanggal ujian tercatat'}
+            {hasil.penguji ? ` · Penguji: ${hasil.penguji}` : ''}
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function KartuJadwal({ jadwal }: { jadwal: JadwalUjian }) {
   if (jadwal.status === 'menunggu_jadwal') {
     return (
       <section className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
@@ -26,8 +55,7 @@ export function UjianBanner({ jadwal }: { jadwal: JadwalUjian | null }) {
         <div>
           <p className="text-sm font-semibold text-foreground">Jadwal ujian kenaikan jilid</p>
           <p className="mt-1 text-sm leading-relaxed text-foreground">
-            Ananda dijadwalkan mengikuti ujian {jadwal.jilid} pada{' '}
-            <strong>{formatDisplayDate(jadwal.tanggal)}</strong>
+            Ananda dijadwalkan mengikuti ujian {jadwal.jilid} pada <strong>{formatDisplayDate(jadwal.tanggal)}</strong>
             {jadwal.waktu ? (
               <>
                 {' '}
@@ -40,5 +68,18 @@ export function UjianBanner({ jadwal }: { jadwal: JadwalUjian | null }) {
         </div>
       </div>
     </section>
+  )
+}
+
+export function UjianBanner({ jadwal, hasil = [] }: { jadwal: JadwalUjian | null; hasil?: HasilUjianJilid[] }) {
+  if (!jadwal && hasil.length === 0) return null
+
+  return (
+    <div className="space-y-3">
+      {hasil.slice(0, 3).map((item) => (
+        <KartuHasil key={item.id || `${item.jilidAsal}-${item.tanggal}`} hasil={item} />
+      ))}
+      {jadwal ? <KartuJadwal jadwal={jadwal} /> : null}
+    </div>
   )
 }

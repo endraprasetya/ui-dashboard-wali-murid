@@ -81,6 +81,8 @@ export type JurnalEntry = {
   semester: string
   hadir: string
   tidakHadir: string
+  links: Array<{ tipe: string; url: string }>
+  tugas: string
 }
 
 export type AttendanceEntry = {
@@ -125,6 +127,22 @@ export type JadwalUjian = {
   status: 'menunggu_jadwal' | 'terjadwal'
 }
 
+export type HasilUjianJilid = {
+  id: string
+  jilidAsal: string
+  jilidTujuan: string
+  tanggal: string
+  penguji: string
+  predikat: string
+  keputusan: string
+  nilai: string
+}
+
+export type InfoUjian = {
+  berlangsung: JadwalUjian | null
+  hasil: HasilUjianJilid[]
+}
+
 export type DashboardData = {
   student: StudentProfile | null
   studentError: string | null
@@ -134,6 +152,7 @@ export type DashboardData = {
   absensi: QueryResult<AttendanceData>
   tertib: QueryResult<TertibData>
   jadwalUjian: JadwalUjian | null
+  hasilUjian: HasilUjianJilid[]
 }
 
 const emptyTahfidz: TahfidzData = { latest: null, total: 0, lancar: 0, history: [] }
@@ -303,7 +322,30 @@ function toJurnal(row: Record<string, unknown>, index: number): JurnalEntry {
     semester: text(row.semester),
     hadir: displayValue(row.hadir),
     tidakHadir: displayValue(row.tidak_hadir),
+    links: parseLinks(row.links),
+    tugas: text(row.tugas),
   }
+}
+
+function parseLinks(value: unknown): Array<{ tipe: string; url: string }> {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => ({
+        tipe: String(item?.tipe || 'video'),
+        url: String(item?.url || '').trim(),
+      }))
+      .filter((item) => item.url)
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return parseLinks(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
+
+  return []
 }
 
 function classifyAttendance(row: Record<string, unknown>): AttendanceEntry['status'] | null {
@@ -428,7 +470,7 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
   // Filter kelas diambil dari siswa yang sedang login agar kelas lain tidak tampil.
   const { data, error } = await supabase
     .from('jurnal_pembelajaran')
-    .select('id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir')
+    .select('id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas, guru')
     .eq('kelas', className)
     .order('tanggal', { ascending: false })
     .limit(240)
@@ -544,6 +586,7 @@ export function dashboardKosong(student: StudentProfile | null, studentError: st
     absensi: { data: emptyAttendance, error: null },
     tertib: { data: emptyTertib, error: null },
     jadwalUjian: null,
+    hasilUjian: [],
   }
 }
 
@@ -559,16 +602,17 @@ export async function getDashboard(idSiswa: string): Promise<DashboardData> {
       absensi: { data: emptyAttendance, error: null },
       tertib: { data: emptyTertib, error: null },
       jadwalUjian: null,
+      hasilUjian: [],
     }
   }
 
-  const [tahfidz, qiroah, jurnal, absensi, tertib, jadwalUjian] = await Promise.all([
+  const [tahfidz, qiroah, jurnal, absensi, tertib, infoUjian] = await Promise.all([
     getTahfidz(idSiswa),
     getQiroah(idSiswa),
     getJurnal(studentResult.data.kelas),
     getAbsensi(idSiswa),
     getTertib(idSiswa),
-    getJadwalUjian(idSiswa),
+    getInfoUjian(idSiswa),
   ])
 
   return {
@@ -579,7 +623,8 @@ export async function getDashboard(idSiswa: string): Promise<DashboardData> {
     jurnal,
     absensi,
     tertib,
-    jadwalUjian,
+    jadwalUjian: infoUjian.berlangsung,
+    hasilUjian: infoUjian.hasil,
   }
 }
 
@@ -589,24 +634,56 @@ function pecahStatusUjian(status: unknown) {
   const kunci = inti.toLowerCase()
   const waktu = jam && /^\d{2}:\d{2}/.test(jam.trim()) ? jam.trim().slice(0, 5) : ''
   if (kunci === 'terjadwal') return { status: 'terjadwal' as const, waktu }
-  if (kunci === 'menunggu_jadwal' || kunci === 'menunggu ujian') return { status: 'menunggu_jadwal' as const, waktu: '' }
+  if (kunci === 'menunggu_jadwal' || kunci === 'menunggu ujian' || kunci.includes('menunggu') || kunci.includes('pengajuan') || kunci.includes('antr')) {
+    return { status: 'menunggu_jadwal' as const, waktu: '' }
+  }
   return null
 }
 
-export async function getJadwalUjian(idSiswa: string): Promise<JadwalUjian | null> {
-  const { data, error } = await getSupabase()
-    .from('pengajuan')
-    .select('id_pengajuan, jilid_diujikan, tanggal_pelaksanaan, tanggal_diajukan, nama_penguji, status')
-    .eq('id_siswa', idSiswa)
+function kunciJilid(value: unknown) {
+  const teks = text(value).toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (!teks) return ''
+  if (teks.includes('quran') || teks.includes('qur') || teks.includes('talaqqi')) return 'quran'
+  const jilid = teks.match(/jilid(\d)/)
+  if (jilid) return `jilid${jilid[1]}`
+  return teks
+}
 
-  if (error) {
-    logQueryError('jadwal ujian', error)
-    return null
-  }
+export async function getInfoUjian(idSiswa: string): Promise<InfoUjian> {
+  const supabase = getSupabase()
+  const [pengajuan, rekapan] = await Promise.all([
+    supabase
+      .from('pengajuan')
+      .select('id_pengajuan, jilid_diujikan, tanggal_pelaksanaan, tanggal_diajukan, nama_penguji, status, id_siswa')
+      .eq('id_siswa', idSiswa),
+    supabase
+      .from('rekapan')
+      .select('id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir')
+      .eq('id_siswa', idSiswa),
+  ])
+
+  if (pengajuan.error) logQueryError('jadwal ujian', pengajuan.error)
+  if (rekapan.error) logQueryError('rekapan ujian', rekapan.error)
+
+  const daftarRekap = (rekapan.error ? [] : rekapan.data || []) as Record<string, unknown>[]
+  const jilidSelesai = new Set(daftarRekap.map((row) => kunciJilid(row.jilid_asal)).filter(Boolean))
+  const hasil = [...daftarRekap]
+    .sort((a, b) => text(b.tanggal_ujian).localeCompare(text(a.tanggal_ujian)))
+    .map((row) => ({
+      id: text(row.id_ujian),
+      jilidAsal: text(row.jilid_asal) || 'kenaikan jilid',
+      jilidTujuan: text(row.jilid_tujuan),
+      tanggal: text(row.tanggal_ujian).slice(0, 10),
+      penguji: text(row.penguji),
+      predikat: text(row.predikat),
+      keputusan: text(row.keputusan) || 'Selesai',
+      nilai: text(row.nilai_akhir),
+    }))
 
   const hariIni = todayIso()
-  const daftar = (data || [])
+  const daftar = (pengajuan.error ? [] : pengajuan.data || [])
     .map((row) => {
+      if (jilidSelesai.has(kunciJilid(row.jilid_diujikan))) return null
       const status = pecahStatusUjian(row.status)
       if (!status) return null
       return {
@@ -621,12 +698,17 @@ export async function getJadwalUjian(idSiswa: string): Promise<JadwalUjian | nul
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
 
-  const terjadwal = daftar
-    .filter((item) => item.status === 'terjadwal')
-    .sort((a, b) => a.urutan.localeCompare(b.urutan))
-  if (terjadwal.length > 0) {
-    return terjadwal.find((item) => item.tanggal >= hariIni) || terjadwal[terjadwal.length - 1]
-  }
+  const terjadwal = daftar.filter((item) => item.status === 'terjadwal').sort((a, b) => a.urutan.localeCompare(b.urutan))
+  const berlangsung =
+    terjadwal.find((item) => item.tanggal >= hariIni) ||
+    terjadwal[terjadwal.length - 1] ||
+    daftar.find((item) => item.status === 'menunggu_jadwal') ||
+    null
 
-  return daftar.find((item) => item.status === 'menunggu_jadwal') || null
+  return { berlangsung, hasil }
+}
+
+export async function getJadwalUjian(idSiswa: string): Promise<JadwalUjian | null> {
+  const info = await getInfoUjian(idSiswa)
+  return info.berlangsung
 }

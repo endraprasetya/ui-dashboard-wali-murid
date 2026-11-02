@@ -7,7 +7,7 @@ import { getNotifikasiWali, type ButirNotifikasi } from '@/lib/notifikasi-wali'
 import {
   dashboardKosong,
   getAbsensi,
-  getJadwalUjian,
+  getInfoUjian,
   getJurnal,
   getQiroah,
   getStudent,
@@ -55,17 +55,26 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
   const dashboard = dashboardKosong(student)
 
   if (bagian === 'beranda') {
-    const [tahfidz, qiroah, jurnal, absensi, tertib, jadwalUjian, diri] = await Promise.all([
+    const [tahfidz, qiroah, jurnal, absensi, tertib, infoUjian, diri] = await Promise.all([
       cacheBagian(id, 'tahfidz', () => getTahfidz(id), sukses),
       cacheBagian(id, 'qiroah', () => getQiroah(id), sukses),
       cacheBagian(id, 'jurnal', () => getJurnal(student.kelas), sukses),
       cacheBagian(id, 'absensi', () => getAbsensi(id), sukses),
       cacheBagian(id, 'tertib', () => getTertib(id), sukses),
-      cacheBagian(id, 'ujian', () => getJadwalUjian(id)),
+      cacheBagian(id, 'ujian-status', () => getInfoUjian(id)),
       cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses),
     ])
     return {
-      dashboard: { ...dashboard, tahfidz, qiroah, jurnal, absensi, tertib, jadwalUjian },
+      dashboard: {
+        ...dashboard,
+        tahfidz,
+        qiroah,
+        jurnal,
+        absensi,
+        tertib,
+        jadwalUjian: infoUjian.berlangsung,
+        hasilUjian: infoUjian.hasil,
+      },
       diri,
       gagal: null,
       notifikasi: notifikasiHasil.item,
@@ -75,6 +84,11 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
   let diri = diriKosong
   if (bagian === 'tahfidz') dashboard.tahfidz = await cacheBagian(id, 'tahfidz', () => getTahfidz(id), sukses)
   if (bagian === 'qiroah') dashboard.qiroah = await cacheBagian(id, 'qiroah', () => getQiroah(id), sukses)
+  if (bagian === 'tahfidz' || bagian === 'qiroah') {
+    const infoUjian = await cacheBagian(id, 'ujian-status', () => getInfoUjian(id))
+    dashboard.jadwalUjian = infoUjian.berlangsung
+    dashboard.hasilUjian = infoUjian.hasil
+  }
   if (bagian === 'jurnal') dashboard.jurnal = await cacheBagian(id, 'jurnal', () => getJurnal(student.kelas), sukses)
   if (bagian === 'tertib') dashboard.tertib = await cacheBagian(id, 'tertib', () => getTertib(id), sukses)
   if (bagian === 'profil') diri = await cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses)

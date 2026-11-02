@@ -83,7 +83,7 @@ export function LoncengNotifikasi({ item }: { item: ButirNotifikasi[] }) {
           id={judulId}
           role="dialog"
           aria-label="Notifikasi"
-          className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-card text-foreground shadow-lg"
+          className="fixed left-1/2 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border bg-card text-foreground shadow-lg sm:absolute sm:left-auto sm:right-0 sm:translate-x-0"
         >
           <p className="border-b px-4 py-3 text-sm font-bold">Notifikasi</p>
           {item.length === 0 ? (

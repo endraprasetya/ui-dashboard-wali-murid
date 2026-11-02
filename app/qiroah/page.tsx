@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { QiroahDashboard } from '@/components/dashboard/qiroah-dashboard'
+import { UjianBanner } from '@/components/dashboard/ujian-banner'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { muatPortal } from '@/lib/muat-portal'
 
@@ -15,6 +16,7 @@ export default async function QiroahPage() {
 
   return (
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/qiroah" notifikasi={notifikasi}>
+      <UjianBanner jadwal={dashboard.jadwalUjian} hasil={dashboard.hasilUjian} />
       <QiroahDashboard
         nama={dashboard.student.name}
         kelas={dashboard.student.kelas}
