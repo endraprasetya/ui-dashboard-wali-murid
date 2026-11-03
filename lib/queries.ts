@@ -183,6 +183,15 @@ function isMissingTable(error: { code?: string; message?: string }) {
   return error.code === 'PGRST205' || (error.message ?? '').toLowerCase().includes('schema cache')
 }
 
+function kolomGuruTidakAda(error?: { code?: string; message?: string } | null) {
+  const pesan = (error?.message ?? '').toLowerCase()
+  return (
+    error?.code === 'PGRST204' ||
+    error?.code === '42703' ||
+    (pesan.includes('guru') && pesan.includes('does not exist'))
+  )
+}
+
 function sortedRows<T extends { tanggal?: unknown }>(rows: T[]) {
   return rows
     .map((row, index) => ({ row, index, time: dateValue(row.tanggal) }))
@@ -307,6 +316,23 @@ function toQiroah(row: Record<string, unknown>, index: number): QiroahEntry {
     tugas: text(row.tugas_rumah),
     statusSetoran: text(row.status_setoran),
   }
+}
+
+export function normalKelasJurnal(kelas?: string) {
+  return String(kelas || '')
+    .toUpperCase()
+    .replace(/KELAS/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+}
+
+function jurnalBerisi(row: Record<string, unknown>) {
+  return Boolean(
+    text(row.mapel) ||
+      text(row.materi) ||
+      text(row.kegiatan) ||
+      text(row.tugas) ||
+      parseLinks(row.links).length > 0,
+  )
 }
 
 function toJurnal(row: Record<string, unknown>, index: number): JurnalEntry {
@@ -465,22 +491,60 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
   const className = kelas.trim()
   if (!className) return { data: [], error: null }
 
+  const kunci = normalKelasJurnal(className)
+  const variasi = Array.from(
+    new Set(
+      [className, className.replace(/\s+/g, ''), className.replace(/\s+/g, ' ').trim(), `Kelas ${className}`].filter(
+        Boolean,
+      ),
+    ),
+  )
+  const kolomDenganGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas, guru'
+  const kolomTanpaGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas'
   const supabase = getSupabase()
-  // jurnal_pembelajaran mencatat kegiatan per kelas, bukan per id_siswa.
-  // Filter kelas diambil dari siswa yang sedang login agar kelas lain tidak tampil.
-  const { data, error } = await supabase
-    .from('jurnal_pembelajaran')
-    .select('id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas, guru')
-    .eq('kelas', className)
-    .order('tanggal', { ascending: false })
-    .limit(240)
+  const cocokKelas = (daftar: Record<string, unknown>[]) =>
+    daftar.filter((row) => normalKelasJurnal(text(row.kelas)) === kunci)
 
-  if (error) {
-    logQueryError('jurnal', error)
-    return { data: [], error: 'Jurnal pembelajaran belum bisa dimuat.' }
+  async function ambil(kolom: string) {
+    const pertama = await supabase
+      .from('jurnal_pembelajaran')
+      .select(kolom)
+      .or(variasi.map((nama) => `kelas.eq.${nama}`).join(','))
+      .order('tanggal', { ascending: false })
+      .limit(400)
+
+    let rows = ((pertama.data ?? []) as Record<string, unknown>[])
+    if (pertama.error && !kolomGuruTidakAda(pertama.error)) logQueryError('jurnal', pertama.error)
+
+    if ((pertama.error && !kolomGuruTidakAda(pertama.error)) || cocokKelas(rows).length === 0) {
+      const cadangan = await supabase
+        .from('jurnal_pembelajaran')
+        .select(kolom)
+        .order('tanggal', { ascending: false })
+        .limit(800)
+      if (cadangan.error) {
+        if (!kolomGuruTidakAda(cadangan.error)) logQueryError('jurnal', cadangan.error)
+        if (pertama.error && !kolomGuruTidakAda(pertama.error)) {
+          return { rows: [] as Record<string, unknown>[], error: cadangan.error || pertama.error }
+        }
+      } else {
+        rows = (cadangan.data ?? []) as Record<string, unknown>[]
+      }
+    }
+
+    return { rows, error: kolomGuruTidakAda(pertama.error) ? pertama.error : null }
   }
 
-  const entries = sortedRows((data ?? []) as Record<string, unknown>[]).map(toJurnal)
+  let hasil = await ambil(kolomDenganGuru)
+  if (hasil.error && kolomGuruTidakAda(hasil.error)) {
+    hasil = await ambil(kolomTanpaGuru)
+  }
+  if (hasil.error && !kolomGuruTidakAda(hasil.error) && hasil.rows.length === 0) {
+    return { data: [], error: 'Jurnal pembelajaran belum bisa dimuat.' }
+  }
+  const rows = hasil.rows
+
+  const entries = sortedRows(cocokKelas(rows).filter(jurnalBerisi)).map(toJurnal)
   return { data: entries, error: null }
 }
 

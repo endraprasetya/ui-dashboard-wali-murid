@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Bell } from 'lucide-react'
 import type { ButirNotifikasi } from '@/lib/notifikasi-tipe'
@@ -19,19 +20,25 @@ function bacaTersimpan() {
 export function LoncengNotifikasi({ item }: { item: ButirNotifikasi[] }) {
   const judulId = useId()
   const bungkus = useRef<HTMLDivElement>(null)
+  const panelMobile = useRef<HTMLDivElement>(null)
   const [buka, setBuka] = useState(false)
   const [siap, setSiap] = useState(false)
+  const [siapPortal, setSiapPortal] = useState(false)
   const [dibaca, setDibaca] = useState<string[]>([])
 
   useEffect(() => {
     setDibaca(bacaTersimpan())
     setSiap(true)
+    setSiapPortal(true)
   }, [item])
 
   useEffect(() => {
     if (!buka) return
     const tutup = (event: MouseEvent) => {
-      if (!bungkus.current?.contains(event.target as Node)) setBuka(false)
+      const target = event.target as Node
+      if (bungkus.current?.contains(target)) return
+      if (panelMobile.current?.contains(target)) return
+      setBuka(false)
     }
     const lewatPapan = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setBuka(false)
@@ -52,6 +59,29 @@ export function LoncengNotifikasi({ item }: { item: ButirNotifikasi[] }) {
     localStorage.setItem(KUNCI, JSON.stringify(ids))
     setDibaca(ids)
   }
+
+  const panel = (
+    <>
+      <p className="border-b px-4 py-3 text-sm font-bold">Notifikasi</p>
+      {item.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-muted-foreground">Belum ada tugas baru atau pengumuman.</p>
+      ) : (
+        <ul className="max-h-[70vh] overflow-y-auto sm:max-h-80">
+          {item.map((baris) => (
+            <li key={baris.id} className="border-b last:border-0">
+              <Link href={baris.href} onClick={() => setBuka(false)} className="block px-4 py-3 transition-colors hover:bg-muted">
+                <span className="block text-sm font-semibold">{baris.judul}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{baris.detail}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+
+  const panelClass =
+    'overflow-hidden rounded-2xl border bg-card text-foreground shadow-lg w-[min(22rem,calc(100vw-2rem))]'
 
   return (
     <div ref={bungkus} className="relative">
@@ -79,28 +109,28 @@ export function LoncengNotifikasi({ item }: { item: ButirNotifikasi[] }) {
         ) : null}
       </button>
       {buka ? (
-        <div
-          id={judulId}
-          role="dialog"
-          aria-label="Notifikasi"
-          className="fixed left-1/2 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border bg-card text-foreground shadow-lg sm:absolute sm:left-auto sm:right-0 sm:translate-x-0"
-        >
-          <p className="border-b px-4 py-3 text-sm font-bold">Notifikasi</p>
-          {item.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">Belum ada tugas baru atau pengumuman.</p>
-          ) : (
-            <ul className="max-h-80 overflow-y-auto">
-              {item.map((baris) => (
-                <li key={baris.id} className="border-b last:border-0">
-                  <Link href={baris.href} onClick={() => setBuka(false)} className="block px-4 py-3 transition-colors hover:bg-muted">
-                    <span className="block text-sm font-semibold">{baris.judul}</span>
-                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{baris.detail}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <>
+          <div
+            id={judulId}
+            role="dialog"
+            aria-label="Notifikasi"
+            className={`absolute right-0 z-50 mt-2 hidden sm:block ${panelClass}`}
+          >
+            {panel}
+          </div>
+          {siapPortal &&
+            createPortal(
+              <div
+                ref={panelMobile}
+                role="dialog"
+                aria-label="Notifikasi"
+                className={`fixed left-1/2 top-[calc(env(safe-area-inset-top,0px)+4.25rem)] z-[100] -translate-x-1/2 sm:hidden ${panelClass}`}
+              >
+                {panel}
+              </div>,
+              document.body,
+            )}
+        </>
       ) : null}
     </div>
   )

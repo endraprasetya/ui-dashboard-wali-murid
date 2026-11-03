@@ -58,7 +58,7 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
     const [tahfidz, qiroah, jurnal, absensi, tertib, infoUjian, diri] = await Promise.all([
       cacheBagian(id, 'tahfidz', () => getTahfidz(id), sukses),
       cacheBagian(id, 'qiroah', () => getQiroah(id), sukses),
-      cacheBagian(id, 'jurnal', () => getJurnal(student.kelas), sukses),
+      getJurnal(student.kelas),
       cacheBagian(id, 'absensi', () => getAbsensi(id), sukses),
       cacheBagian(id, 'tertib', () => getTertib(id), sukses),
       cacheBagian(id, 'ujian-status', () => getInfoUjian(id)),
@@ -89,7 +89,7 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
     dashboard.jadwalUjian = infoUjian.berlangsung
     dashboard.hasilUjian = infoUjian.hasil
   }
-  if (bagian === 'jurnal') dashboard.jurnal = await cacheBagian(id, 'jurnal', () => getJurnal(student.kelas), sukses)
+  if (bagian === 'jurnal') dashboard.jurnal = await getJurnal(student.kelas)
   if (bagian === 'tertib') dashboard.tertib = await cacheBagian(id, 'tertib', () => getTertib(id), sukses)
   if (bagian === 'profil') diri = await cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses)
 

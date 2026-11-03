@@ -4,6 +4,7 @@ import { KotakRingkas } from '@/components/dashboard/kotak-ringkas'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import type { HasilDataDiri } from '@/lib/data-diri'
 import type { DashboardData, JurnalEntry, TertibEntry } from '@/lib/queries'
+import { labelMapelGuru } from '@/lib/format'
 import { adaIsiTugas, dahulukanBelumDikerjakan, sudahDikonfirmasi } from '@/lib/tugas-status'
 
 type RingkasKeuangan = {
@@ -152,7 +153,11 @@ export function BerandaRingkas({
             <JudulBagian>3 kegiatan terakhir</JudulBagian>
             <ul>
               {jurnal.map((row: JurnalEntry) => (
-                <Baris key={row.id} kiri={`${row.mapel}${row.materi ? ` · ${row.materi}` : ''}`} kanan={row.date} />
+                <Baris
+                  key={row.id}
+                  kiri={`${labelMapelGuru(row.mapel, row.guru)}${row.materi ? ` · ${row.materi}` : ''}`}
+                  kanan={row.date}
+                />
               ))}
             </ul>
           </div>

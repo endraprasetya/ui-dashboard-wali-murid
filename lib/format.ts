@@ -5,6 +5,12 @@ export function text(value: unknown) {
   return raw
 }
 
+export function labelMapelGuru(mapel: string, guru: string) {
+  const namaMapel = text(mapel) || 'Pembelajaran'
+  const namaGuru = text(guru)
+  return namaGuru ? `${namaMapel} - ${namaGuru}` : namaMapel
+}
+
 export function dateValue(value: unknown) {
   const raw = text(value)
   if (!raw) return 0

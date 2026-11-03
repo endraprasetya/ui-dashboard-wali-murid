@@ -1,11 +1,12 @@
 'use client'
 
-import { Clock, Calendar, Link, NotebookPen, User } from 'lucide-react'
-import { useState, useMemo } from 'react'
-import { todayIso } from '@/lib/format'
+import { Calendar, Link, NotebookPen } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { labelMapelGuru, todayIso } from '@/lib/format'
 import type { JurnalEntry } from '@/lib/queries'
 import { DashboardCard } from './dashboard-card'
 import { ModuleMessage } from './module-message'
+import { RefreshButton } from './refresh-button'
 
 const WAKTU_JAM: Record<string, string> = {
   '1': '07.00 – 07.35',
@@ -28,7 +29,6 @@ function jamPelajaran(jam: string) {
   return `Jam ke-${nomor} · ${waktu}`
 }
 
-// Function to sort entries by jam (lesson period)
 function sortEntriesByJam(entries: JurnalEntry[]): JurnalEntry[] {
   return [...entries].sort((a, b) => {
     const jamA = parseInt(a.jam || '0', 10)
@@ -49,15 +49,10 @@ export function JurnalCard({
   error: string | null
 }) {
   const [selectedDate, setSelectedDate] = useState<string>('')
-
   const hariIni = todayIso()
 
-  // Filter entries by selected date
   const filteredEntries = useMemo(() => {
-    const filtered = selectedDate
-      ? entries.filter((item) => item.iso === selectedDate)
-      : entries
-    // Sort by jam (ascending) when a date is selected
+    const filtered = selectedDate ? entries.filter((item) => item.iso === selectedDate) : entries
     return selectedDate ? sortEntriesByJam(filtered) : filtered
   }, [entries, selectedDate])
 
@@ -67,6 +62,7 @@ export function JurnalCard({
       subtitle={`Catatan kegiatan ${classLabel}`}
       icon={NotebookPen}
       className={className}
+      action={<RefreshButton label="Muat ulang" className="text-xs font-semibold text-primary hover:underline disabled:opacity-60" />}
     >
       {error ? (
         <ModuleMessage tone="error">{error}</ModuleMessage>
@@ -74,8 +70,7 @@ export function JurnalCard({
         <ModuleMessage>Belum ada jurnal untuk kelas ini.</ModuleMessage>
       ) : (
         <>
-          {/* Date Filter with Calendar */}
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
             <Calendar className="size-4 text-muted-foreground" />
             <input
               type="date"
@@ -94,75 +89,65 @@ export function JurnalCard({
             )}
           </div>
 
-          <ol className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
-            {filteredEntries.map((item) => {
-              const mendatang = Boolean(item.iso) && item.iso > hariIni
-              if (mendatang) {
-                return (
-                  <li key={item.id} className="rounded-xl border border-dashed px-3 py-2.5">
-                    <p className="text-[11px] font-medium text-muted-foreground">{item.date}</p>
-                    <p className="mt-1 text-sm font-semibold text-foreground">{item.mapel}</p>
-                    <p className="mt-0.5 text-xs text-foreground">Jam pelajaran {jamPelajaran(item.jam)}</p>
-                  </li>
-                )
-              }
-              return (
-                <li key={item.id} className="flex flex-col gap-2 rounded-xl border p-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <Clock className="size-3.5" aria-hidden="true" />
-                      {item.jam}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">{item.mapel}</p>
-                      {item.materi && <p className="mt-0.5 text-xs text-foreground">{item.materi}</p>}
-                      {item.kegiatan && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.kegiatan}</p>}
-
-                      {/* Guru Info */}
-                      {item.guru && (
-                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <User className="size-3" />
-                          <span>{item.guru}</span>
-                        </div>
-                      )}
-
-                      {/* Links */}
-                      {item.links && item.links.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {item.links.map((link, idx) => (
-                            <a
-                              key={idx}
-                              href={link.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
-                            >
-                              <Link className="size-3" />
-                              {link.tipe}
-                            </a>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Tugas */}
-                      {item.tugas && (
-                        <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5">
-                          <p className="text-[11px] font-medium text-amber-800">
-                            Tugas: {item.tugas}
-                          </p>
-                        </div>
-                      )}
-
-                      <p className="mt-2 text-[11px] text-muted-foreground">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[860px] text-left text-xs">
+              <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2.5">Tanggal</th>
+                  <th className="px-3 py-2.5">Jam</th>
+                  <th className="px-3 py-2.5">Mata pelajaran</th>
+                  <th className="px-3 py-2.5">Materi pokok</th>
+                  <th className="px-3 py-2.5">Kegiatan</th>
+                  <th className="px-3 py-2.5">Tugas di rumah</th>
+                  <th className="px-3 py-2.5">Link</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredEntries.map((item) => {
+                  const mendatang = Boolean(item.iso) && item.iso > hariIni
+                  return (
+                    <tr key={item.id} className={mendatang ? 'bg-slate-50/70' : 'bg-white'}>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-slate-700">
                         {item.date}
-                        {item.semester ? ` · Semester ${item.semester}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+                        {item.semester ? <span className="mt-0.5 block text-[10px] font-medium text-slate-400">Semester {item.semester}</span> : null}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">{jamPelajaran(item.jam)}</td>
+                      <td className="px-3 py-2.5 font-semibold text-slate-900">{labelMapelGuru(item.mapel, item.guru)}</td>
+                      <td className="px-3 py-2.5 text-slate-600">{item.materi || '-'}</td>
+                      <td className="px-3 py-2.5 text-slate-500">{item.kegiatan || '-'}</td>
+                      <td className="px-3 py-2.5">
+                        {item.tugas ? (
+                          <span className="rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">{item.tugas}</span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {item.links && item.links.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {item.links.map((link, idx) => (
+                              <a
+                                key={`${item.id}-${idx}`}
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                              >
+                                <Link className="size-3" />
+                                {link.tipe}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </DashboardCard>
