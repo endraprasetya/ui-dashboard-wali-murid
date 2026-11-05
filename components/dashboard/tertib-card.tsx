@@ -39,7 +39,12 @@ export function TertibCard({ data, error }: { data: TertibData; error: string | 
               <li key={item.id} className="flex items-start justify-between gap-3 rounded-xl border px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">{item.label}</p>
-                  {item.keterangan ? <p className="text-xs text-foreground/80">{item.keterangan}</p> : null}
+                  {item.keterangan ? (
+                    <p className="text-xs text-foreground/80">
+                      <span className="font-medium text-muted-foreground">Catatan guru: </span>
+                      {item.keterangan}
+                    </p>
+                  ) : null}
                   <p className="text-[11px] text-muted-foreground">
                     {item.month} · {item.teacher}
                   </p>

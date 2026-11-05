@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
-import { TertibCard } from '@/components/dashboard/tertib-card'
+import { TertibPanel } from '@/components/dashboard/tertib-panel'
 import { muatPortal } from '@/lib/muat-portal'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,11 @@ export default async function TertibPage() {
 
   return (
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/tertib" notifikasi={notifikasi}>
-      <TertibCard data={dashboard.tertib.data} error={dashboard.tertib.error} />
+      <TertibPanel
+        idSiswa={dashboard.student.idSiswa}
+        initialData={dashboard.tertib.data}
+        initialError={dashboard.tertib.error}
+      />
     </PortalKerangka>
   )
 }

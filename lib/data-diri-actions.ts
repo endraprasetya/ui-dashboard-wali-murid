@@ -37,6 +37,12 @@ export async function updateDataDiri(formData: FormData): Promise<{ error: strin
   if (saatIni.error) return { error: saatIni.error }
   if (!saatIni.data) return { error: 'Data buku induk ananda belum tertaut.' }
 
+  const namaBaru = String(formData.get('nama_lengkap') ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+  if (!namaBaru) return { error: 'Nama lengkap anak wajib diisi.' }
+  if (namaBaru.length > 120) return { error: 'Nama lengkap terlalu panjang.' }
+
   const payload: Record<string, string | number | null> = {}
   for (const kunci of KOLOM_EDIT) {
     const hasil = nilaiKolom(kunci, formData.get(kunci))
@@ -45,17 +51,31 @@ export async function updateDataDiri(formData: FormData): Promise<{ error: strin
   }
 
   const baris: DataDiri = saatIni.data
-  const { data, error } = await getSupabase()
+  const namaLama = baris.nama_lengkap
+  const supabase = getSupabase()
+
+  const { data, error } = await supabase
     .from('data_diri_siswa')
-    .update(payload)
+    .update({ ...payload, nama_lengkap: namaBaru })
     .eq('nomor_induk_sekolah', baris.nomor_induk_sekolah)
-    .eq('nama_lengkap', baris.nama_lengkap)
+    .eq('nama_lengkap', namaLama)
     .select('nama_lengkap')
 
   if (error) return { error: 'Perubahan belum tersimpan. Periksa isian lalu coba lagi.' }
   if (!data?.length) {
     return { error: 'Perubahan ditolak oleh database. Hak ubah tabel buku induk belum dibuka untuk portal wali.' }
   }
+
+  if (namaBaru !== namaLama) {
+    const { error: errSiswa } = await supabase
+      .from('siswa')
+      .update({ nama_siswa: namaBaru })
+      .eq('id_siswa', session.idSiswa)
+    if (errSiswa) {
+      return { error: 'Nama di buku induk tersimpan, tetapi gagal memperbarui data siswa. Hubungi sekolah.' }
+    }
+  }
+
   updateTag(`wali:${session.idSiswa}:diri`)
   return { error: null }
 }

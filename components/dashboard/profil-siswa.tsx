@@ -54,7 +54,16 @@ export function ProfilSiswa({ data, error }: { data: DataDiri | null; error: str
           }}
           className="mt-4 grid gap-3 sm:grid-cols-2"
         >
-          <Identitas data={data} />
+          <label className="text-xs font-semibold text-muted-foreground sm:col-span-2">
+            Nama lengkap anak
+            <input
+              name="nama_lengkap"
+              defaultValue={data.nama_lengkap}
+              required
+              className="mt-1 w-full rounded-xl border bg-background px-3 py-2 text-sm text-foreground"
+            />
+          </label>
+          <input type="hidden" name="kelas" value={data.kelas} />
           {KOLOM_EDIT.map((kunci) => (
             <label key={kunci} className="text-xs font-semibold text-muted-foreground">
               {LABEL[kunci]}
