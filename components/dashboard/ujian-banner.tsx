@@ -27,6 +27,11 @@ function KartuHasil({ hasil }: { hasil: HasilUjianJilid }) {
             {hasil.tanggal ? formatDisplayDate(hasil.tanggal) : 'Tanggal ujian tercatat'}
             {hasil.penguji ? ` · Penguji: ${hasil.penguji}` : ''}
           </p>
+          {hasil.catatanPenguji ? (
+            <p className="mt-2 text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">Catatan Penguji:</span> {hasil.catatanPenguji}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

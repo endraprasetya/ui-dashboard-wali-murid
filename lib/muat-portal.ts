@@ -19,7 +19,7 @@ import { clearSession, getSession } from '@/lib/session'
 
 const diriKosong: HasilDataDiri = { data: null, error: null, kurang: [] }
 
-export type BagianPortal = 'beranda' | 'tahfidz' | 'qiroah' | 'jurnal' | 'tertib' | 'profil' | 'keuangan'
+export type BagianPortal = 'beranda' | 'tahfidz' | 'qiroah' | 'jurnal' | 'absensi' | 'tertib' | 'profil' | 'keuangan'
 
 const sukses = (hasil: { error: string | null }) => hasil.error == null
 

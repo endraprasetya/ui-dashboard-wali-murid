@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Tahfidz', href: '/tahfidz' },
   { label: 'Qiroah', href: '/qiroah' },
   { label: 'Jurnal', href: '/jurnal' },
+  { label: 'Absensi', href: '/absensi' },
   { label: 'Tertib', href: '/tertib' },
   { label: 'Keuangan', href: '/keuangan' },
 ]

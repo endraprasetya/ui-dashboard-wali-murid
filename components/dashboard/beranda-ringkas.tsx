@@ -228,7 +228,7 @@ export function BerandaRingkas({
         </div>
       </KotakRingkas>
 
-      <KotakRingkas judul={`Presensi ${absensi.monthLabel}`} ikon={CalendarCheck} nada="slate" className="md:col-span-2">
+      <KotakRingkas href="/absensi" judul={`Presensi ${absensi.monthLabel}`} ikon={CalendarCheck} nada="slate" className="md:col-span-2">
         {data.absensi.error ? (
           <Kosong teks={data.absensi.error} />
         ) : absensi.unavailable ? (
@@ -237,7 +237,8 @@ export function BerandaRingkas({
           <Kosong teks="Belum ada catatan kehadiran." />
         ) : (
           <p className="text-sm">
-            Hadir {absensi.present} · Sakit {absensi.sick} · Izin {absensi.permission} · Alpha {absensi.absent}
+            {absensi.totalDays} hari efektif · Hadir {absensi.present} hari · Tidak hadir: Sakit {absensi.sick}, Izin{' '}
+            {absensi.permission}, Alpha {absensi.absent}
           </p>
         )}
       </KotakRingkas>

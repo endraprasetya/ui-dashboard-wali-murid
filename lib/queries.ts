@@ -13,6 +13,8 @@ import {
 } from '@/lib/format'
 import { isStudentId } from '@/lib/student-id'
 import { buildTertibData, TERTIB_POINT_SELECT } from '@/lib/tertib-data'
+import { getAbsensiJurnalSiswa } from '@/lib/absensi-jurnal-wali'
+import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
 
 export type QueryResult<T> = {
@@ -137,6 +139,7 @@ export type HasilUjianJilid = {
   predikat: string
   keputusan: string
   nilai: string
+  catatanPenguji: string
 }
 
 export type InfoUjian = {
@@ -319,12 +322,7 @@ function toQiroah(row: Record<string, unknown>, index: number): QiroahEntry {
   }
 }
 
-export function normalKelasJurnal(kelas?: string) {
-  return String(kelas || '')
-    .toUpperCase()
-    .replace(/KELAS/g, '')
-    .replace(/[^A-Z0-9]/g, '')
-}
+export { normalKelasJurnal } from '@/lib/kelas-jurnal'
 
 function jurnalBerisi(row: Record<string, unknown>) {
   return Boolean(
@@ -552,56 +550,37 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
 export async function getAbsensi(idSiswa: string): Promise<QueryResult<AttendanceData>> {
   assertStudentId(idSiswa)
 
-  const supabase = getSupabase()
-  const { data, error } = await supabase.from('absensi').select('*').eq('id_siswa', idSiswa).limit(200)
-
-  if (error) {
-    if (isMissingTable(error)) {
-      return { data: { ...emptyAttendance, unavailable: true }, error: null }
-    }
-    logQueryError('absensi', error)
-    return { data: emptyAttendance, error: 'Rekap absensi belum bisa dimuat.' }
+  const profil = await getStudent(idSiswa)
+  if (!profil.data) {
+    return { data: emptyAttendance, error: profil.error || 'Data siswa belum bisa dimuat.' }
   }
 
-  const monthKey = currentMonthKey()
-  const rows = sortedRows(
-    ((data ?? []) as Record<string, unknown>[]).map((row) => ({
-      ...row,
-      tanggal: row.tanggal ?? row.tgl ?? row.date ?? row.created_at,
-    })),
-  )
-
-  const history: AttendanceEntry[] = []
-  const counts = { Hadir: 0, Izin: 0, Sakit: 0, Alpha: 0 }
-  let datedRows = 0
-
-  rows.forEach((row, index) => {
-    const status = classifyAttendance(row)
-    if (!status) return
-
-    if (history.length < 8) {
-      history.push({
-        id: text(row.id) || text(row.id_absensi) || `absensi-${index}`,
-        date: formatDisplayDate(row.tanggal),
-        status,
-      })
-    }
-
-    const rowMonth = monthKeyFromRow(row)
-    if (rowMonth) datedRows += 1
-    if (!rowMonth || rowMonth === monthKey) counts[status] += 1
+  const { data: rekap, error } = await getAbsensiJurnalSiswa({
+    idSiswa,
+    namaSiswa: profil.data.name,
+    kelas: profil.data.kelas,
   })
 
-  const totalDays = counts.Hadir + counts.Izin + counts.Sakit + counts.Alpha
+  if (error) {
+    return { data: emptyAttendance, error }
+  }
+
+  const history: AttendanceEntry[] = rekap.rincianTidakHadir.slice(0, 8).map((item) => ({
+    id: item.tanggal,
+    date: item.tanggalLabel,
+    status: item.status === 'Alpha' ? 'Alpha' : item.status,
+  }))
+
+  const totalDays = rekap.hariEfektif
 
   return {
     data: {
       unavailable: false,
-      monthLabel: datedRows ? currentMonthLabel() : 'Semua catatan',
-      present: counts.Hadir,
-      sick: counts.Sakit,
-      permission: counts.Izin,
-      absent: counts.Alpha,
+      monthLabel: rekap.bulanLabel,
+      present: rekap.hariHadir,
+      sick: rekap.sakit,
+      permission: rekap.izin,
+      absent: rekap.alpha,
       totalDays,
       history,
     },
@@ -710,7 +689,9 @@ export async function getInfoUjian(idSiswa: string): Promise<InfoUjian> {
       .eq('id_siswa', idSiswa),
     supabase
       .from('rekapan')
-      .select('id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir')
+      .select(
+        'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan',
+      )
       .eq('id_siswa', idSiswa),
   ])
 
@@ -730,6 +711,7 @@ export async function getInfoUjian(idSiswa: string): Promise<InfoUjian> {
       predikat: text(row.predikat),
       keputusan: text(row.keputusan) || 'Selesai',
       nilai: text(row.nilai_akhir),
+      catatanPenguji: text(row.keterangan),
     }))
 
   const hariIni = todayIso()
