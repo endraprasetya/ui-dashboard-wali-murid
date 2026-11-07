@@ -1,10 +1,20 @@
 import Link from 'next/link'
-import { BookHeart, CalendarCheck, GraduationCap, NotebookPen, ShieldCheck, UserRound, Wallet } from 'lucide-react'
+import {
+  BookHeart,
+  CalendarCheck,
+  GraduationCap,
+  Megaphone,
+  NotebookPen,
+  ShieldCheck,
+  UserRound,
+  Wallet,
+} from 'lucide-react'
 import { KotakRingkas } from '@/components/dashboard/kotak-ringkas'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import type { HasilDataDiri } from '@/lib/data-diri'
 import type { DashboardData, JurnalEntry, TertibEntry } from '@/lib/queries'
 import { labelMapelGuru } from '@/lib/format'
+import { agendaMendatang } from '@/lib/pengumuman'
 import { adaIsiTugas, dahulukanBelumDikerjakan, sudahDikonfirmasi } from '@/lib/tugas-status'
 
 type RingkasKeuangan = {
@@ -73,6 +83,7 @@ export function BerandaRingkas({
   const jurnal = data.jurnal.data.slice(0, 3)
   const tertib = data.tertib.data.items.slice(0, 3)
   const absensi = data.absensi.data
+  const pengumuman = agendaMendatang(2)
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -191,9 +202,11 @@ export function BerandaRingkas({
           ) : (
             <div>
               <p className="text-xs text-slate-600">
-                Saldo poin{' '}
-                <span className="font-bold text-slate-900">
-                  {data.tertib.data.total > 0 ? `+${data.tertib.data.total}` : data.tertib.data.total}
+                Sisa poin bulan {data.tertib.data.bulanLabel}{' '}
+                <span className="font-bold text-slate-900">{data.tertib.data.sisa}</span>
+                <span className="mt-0.5 block text-[11px] opacity-90">
+                  Dari modal {data.tertib.data.modal} + kebaikan {data.tertib.data.prestasi} − pelanggaran{' '}
+                  {data.tertib.data.pelanggaran}
                 </span>
               </p>
               {tertib.length === 0 ? (
@@ -228,7 +241,24 @@ export function BerandaRingkas({
         </div>
       </KotakRingkas>
 
-      <KotakRingkas href="/absensi" judul={`Presensi ${absensi.monthLabel}`} ikon={CalendarCheck} nada="slate" className="md:col-span-2">
+      <KotakRingkas href="/pengumuman" judul="Pengumuman" ikon={Megaphone} nada="emerald" pisahTautan>
+        <div className="space-y-2">
+          {pengumuman.length === 0 ? (
+            <Kosong teks="Tidak ada agenda mendatang terdekat." />
+          ) : (
+            <ul>
+              {pengumuman.map((item) => (
+                <Baris key={item.title} kiri={item.title} kanan={item.date} />
+              ))}
+            </ul>
+          )}
+          <Link href="/pengumuman" className="tombol-buka inline-flex items-center rounded-xl px-3.5 py-2 text-xs font-bold">
+            Lihat semua pengumuman
+          </Link>
+        </div>
+      </KotakRingkas>
+
+      <KotakRingkas href="/absensi" judul={`Presensi ${absensi.monthLabel}`} ikon={CalendarCheck} nada="slate">
         {data.absensi.error ? (
           <Kosong teks={data.absensi.error} />
         ) : absensi.unavailable ? (

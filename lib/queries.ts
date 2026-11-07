@@ -12,7 +12,8 @@ import {
   todayIso,
 } from '@/lib/format'
 import { isStudentId } from '@/lib/student-id'
-import { buildTertibData, TERTIB_POINT_SELECT } from '@/lib/tertib-data'
+import { buildTertibData, emptyTertibData, mapPeringkatKelas, TERTIB_POINT_SELECT } from '@/lib/tertib-data'
+import type { BarisPeringkatKelas } from '@/lib/tertib-saldo'
 import { getAbsensiJurnalSiswa } from '@/lib/absensi-jurnal-wali'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
@@ -115,9 +116,14 @@ export type TertibEntry = {
 }
 
 export type TertibData = {
+  modal: number
+  sisa: number
+  /** Sisa saldo bulanan (alias `sisa`, modal 200 + kebaikan − pelanggaran). */
   total: number
   prestasi: number
   pelanggaran: number
+  bulan: string
+  bulanLabel: string
   items: TertibEntry[]
 }
 
@@ -171,7 +177,7 @@ const emptyAttendance: AttendanceData = {
   totalDays: 0,
   history: [],
 }
-const emptyTertib: TertibData = { total: 0, prestasi: 0, pelanggaran: 0, items: [] }
+const emptyTertib: TertibData = emptyTertibData()
 
 function assertStudentId(idSiswa: string) {
   if (!isStudentId(idSiswa)) {
@@ -604,7 +610,47 @@ export async function getTertib(idSiswa: string): Promise<QueryResult<TertibData
     return { data: emptyTertib, error: 'Catatan ketertiban belum bisa dimuat.' }
   }
 
-  return { data: buildTertibData((data ?? []) as Record<string, unknown>[]), error: null }
+  const bulan = currentMonthKey()
+  return {
+    data: buildTertibData((data ?? []) as Record<string, unknown>[], idSiswa, bulan),
+    error: null,
+  }
+}
+
+export async function getTertibPeringkatKelas(
+  kelas: string,
+  idSiswa: string,
+  bulan = currentMonthKey(),
+): Promise<BarisPeringkatKelas[]> {
+  const className = kelas.trim()
+  if (!className || !isStudentId(idSiswa)) return []
+
+  const supabase = getSupabase()
+  const { data: siswaKelas, error: galatSiswa } = await supabase
+    .from('siswa')
+    .select('id_siswa, nama_siswa, kelas')
+    .eq('kelas', className)
+    .not('kelas', 'ilike', '%Alumni%')
+    .order('nama_siswa', { ascending: true })
+
+  if (galatSiswa || !siswaKelas?.length) {
+    if (galatSiswa) logQueryError('siswa-kelas-tertib', galatSiswa)
+    return []
+  }
+
+  const ids = siswaKelas.map((row) => String(row.id_siswa)).filter(Boolean)
+  const { data: logs, error: galatLog } = await supabase
+    .from('tertib_point')
+    .select('id_siswa, bulan, pts')
+    .eq('bulan', bulan)
+    .in('id_siswa', ids)
+
+  if (galatLog) {
+    logQueryError('tertib-peringkat', galatLog)
+    return []
+  }
+
+  return mapPeringkatKelas(siswaKelas, (logs ?? []) as Record<string, unknown>[], bulan)
 }
 
 export function dashboardKosong(student: StudentProfile | null, studentError: string | null = null): DashboardData {

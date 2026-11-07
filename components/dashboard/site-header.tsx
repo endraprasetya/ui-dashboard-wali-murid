@@ -13,6 +13,7 @@ const navItems = [
   { label: 'Absensi', href: '/absensi' },
   { label: 'Tertib', href: '/tertib' },
   { label: 'Keuangan', href: '/keuangan' },
+  { label: 'Pengumuman', href: '/pengumuman' },
 ]
 
 function labelUnit(unit: string) {
