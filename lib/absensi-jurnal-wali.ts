@@ -41,12 +41,15 @@ async function fetchJurnalKelasRentang(kelas: string, start: string, end: string
     const all: Record<string, unknown>[] = []
     let from = 0
 
+    const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
+
     while (true) {
       let query = supabase
         .from('jurnal_pembelajaran')
         .select(kolom)
         .gte('tanggal', start)
         .lte('tanggal', end)
+        .or(filterKelas)
         .order('tanggal', { ascending: true })
         .range(from, from + pageSize - 1)
 
@@ -58,19 +61,7 @@ async function fetchJurnalKelasRentang(kelas: string, start: string, end: string
       from += pageSize
     }
 
-    const filtered = cocokKelas(all)
-    if (filtered.length > 0) return { rows: filtered, error: null }
-
-    const cadangan = await supabase
-      .from('jurnal_pembelajaran')
-      .select(kolom)
-      .gte('tanggal', start)
-      .lte('tanggal', end)
-      .order('tanggal', { ascending: true })
-      .limit(2000)
-
-    if (cadangan.error) return { rows: [], error: cadangan.error }
-    return { rows: cocokKelas((cadangan.data ?? []) as Record<string, unknown>[]), error: null }
+    return { rows: cocokKelas(all), error: null }
   }
 
   let hasil = await ambil(kolomDenganGuru)

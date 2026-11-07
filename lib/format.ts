@@ -47,6 +47,24 @@ export function formatDisplayDate(value: unknown) {
   }).format(new Date(time))
 }
 
+/** Tanggal ringkas untuk HP, contoh: "07 Nov 2026" (WIB). */
+export function formatTanggalRingkas(value: unknown) {
+  const raw = text(value)
+  if (!raw) return '—'
+
+  const time = dateValue(raw)
+  if (!time) return raw
+
+  const formatted = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(time))
+
+  return formatted.replace(/\./g, '').replace(/\s+/g, ' ').trim()
+}
+
 export function formatMonthLabel(value: unknown) {
   const raw = text(value)
   const match = raw.match(/^(\d{4})-(\d{2})$/)

@@ -16,7 +16,12 @@ export default async function TertibPage() {
   if (gagal || !dashboard.student) return <PortalGagal pesan={gagal || 'Data siswa belum bisa dimuat.'} />
 
   const bulan = dashboard.tertib.data.bulan || currentMonthKey()
-  const peringkat = await getTertibPeringkatKelas(dashboard.student.kelas, dashboard.student.idSiswa, bulan)
+  const peringkat = await getTertibPeringkatKelas(
+    dashboard.student.kelas,
+    dashboard.student.idSiswa,
+    bulan,
+    dashboard.student.unit,
+  )
 
   return (
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/tertib" notifikasi={notifikasi}>
@@ -24,6 +29,7 @@ export default async function TertibPage() {
         idSiswa={dashboard.student.idSiswa}
         namaSiswa={dashboard.student.name}
         kelas={dashboard.student.kelas}
+        unit={dashboard.student.unit}
         initialData={dashboard.tertib.data}
         initialError={dashboard.tertib.error}
         initialPeringkat={peringkat}

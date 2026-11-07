@@ -17,6 +17,7 @@ import type { BarisPeringkatKelas } from '@/lib/tertib-saldo'
 import { getAbsensiJurnalSiswa } from '@/lib/absensi-jurnal-wali'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
+import { unitLogin, unitSama } from '@/lib/unit-isolasi'
 
 export type QueryResult<T> = {
   data: T
@@ -113,6 +114,8 @@ export type TertibEntry = {
   teacher: string
   month: string
   keterangan: string
+  /** Tanggal pencatatan poin oleh guru (dari created_at / tanggal transaksi). */
+  tanggal: string
 }
 
 export type TertibData = {
@@ -521,23 +524,11 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
     let rows = ((pertama.data ?? []) as Record<string, unknown>[])
     if (pertama.error && !kolomGuruTidakAda(pertama.error)) logQueryError('jurnal', pertama.error)
 
-    if ((pertama.error && !kolomGuruTidakAda(pertama.error)) || cocokKelas(rows).length === 0) {
-      const cadangan = await supabase
-        .from('jurnal_pembelajaran')
-        .select(kolom)
-        .order('tanggal', { ascending: false })
-        .limit(800)
-      if (cadangan.error) {
-        if (!kolomGuruTidakAda(cadangan.error)) logQueryError('jurnal', cadangan.error)
-        if (pertama.error && !kolomGuruTidakAda(pertama.error)) {
-          return { rows: [] as Record<string, unknown>[], error: cadangan.error || pertama.error }
-        }
-      } else {
-        rows = (cadangan.data ?? []) as Record<string, unknown>[]
-      }
+    if (pertama.error && !kolomGuruTidakAda(pertama.error)) {
+      return { rows: [] as Record<string, unknown>[], error: pertama.error }
     }
 
-    return { rows, error: kolomGuruTidakAda(pertama.error) ? pertama.error : null }
+    return { rows: cocokKelas(rows), error: kolomGuruTidakAda(pertama.error) ? pertama.error : null }
   }
 
   let hasil = await ambil(kolomDenganGuru)
@@ -621,36 +612,50 @@ export async function getTertibPeringkatKelas(
   kelas: string,
   idSiswa: string,
   bulan = currentMonthKey(),
+  unit?: string,
 ): Promise<BarisPeringkatKelas[]> {
   const className = kelas.trim()
+  const unitAktif = unitLogin(unit)
   if (!className || !isStudentId(idSiswa)) return []
 
   const supabase = getSupabase()
-  const { data: siswaKelas, error: galatSiswa } = await supabase
+  let querySiswa = supabase
     .from('siswa')
-    .select('id_siswa, nama_siswa, kelas')
+    .select('id_siswa, nama_siswa, kelas, unit')
     .eq('kelas', className)
     .not('kelas', 'ilike', '%Alumni%')
     .order('nama_siswa', { ascending: true })
 
-  if (galatSiswa || !siswaKelas?.length) {
+  if (unitAktif) querySiswa = querySiswa.eq('unit', unitAktif)
+
+  const { data: siswaKelas, error: galatSiswa } = await querySiswa
+
+  const daftarSiswa = (siswaKelas ?? []).filter((row) =>
+    unitAktif ? unitSama(row.unit, unitAktif) : true,
+  )
+
+  if (galatSiswa || !daftarSiswa.length) {
     if (galatSiswa) logQueryError('siswa-kelas-tertib', galatSiswa)
     return []
   }
 
-  const ids = siswaKelas.map((row) => String(row.id_siswa)).filter(Boolean)
-  const { data: logs, error: galatLog } = await supabase
+  const ids = daftarSiswa.map((row) => String(row.id_siswa)).filter(Boolean)
+  let queryLog = supabase
     .from('tertib_point')
-    .select('id_siswa, bulan, pts')
+    .select('id_siswa, bulan, pts, unit')
     .eq('bulan', bulan)
     .in('id_siswa', ids)
+
+  if (unitAktif) queryLog = queryLog.eq('unit', unitAktif)
+
+  const { data: logs, error: galatLog } = await queryLog
 
   if (galatLog) {
     logQueryError('tertib-peringkat', galatLog)
     return []
   }
 
-  return mapPeringkatKelas(siswaKelas, (logs ?? []) as Record<string, unknown>[], bulan)
+  return mapPeringkatKelas(daftarSiswa, (logs ?? []) as Record<string, unknown>[], bulan, unitAktif)
 }
 
 export function dashboardKosong(student: StudentProfile | null, studentError: string | null = null): DashboardData {

@@ -37,33 +37,43 @@ async function muatTertib(idSiswa: string, bulan: string): Promise<TertibData> {
   return buildTertibData((data ?? []) as Record<string, unknown>[], idSiswa, bulan)
 }
 
-async function muatPeringkat(kelas: string, bulan: string): Promise<BarisPeringkatKelas[]> {
+async function muatPeringkat(kelas: string, unit: string, bulan: string): Promise<BarisPeringkatKelas[]> {
   if (!kelas.trim()) return []
+  const unitBersih = unit.trim()
   const supabase = getSupabaseBrowser()
-  const { data: siswaKelas, error: galatSiswa } = await supabase
+  let querySiswa = supabase
     .from('siswa')
-    .select('id_siswa, nama_siswa, kelas')
+    .select('id_siswa, nama_siswa, kelas, unit')
     .eq('kelas', kelas)
     .not('kelas', 'ilike', '%Alumni%')
     .order('nama_siswa', { ascending: true })
 
+  if (unitBersih) querySiswa = querySiswa.eq('unit', unitBersih)
+
+  const { data: siswaKelas, error: galatSiswa } = await querySiswa
+
   if (galatSiswa || !siswaKelas?.length) return []
 
   const ids = siswaKelas.map((row) => String(row.id_siswa))
-  const { data: logs, error: galatLog } = await supabase
+  let queryLog = supabase
     .from('tertib_point')
-    .select('id_siswa, bulan, pts')
+    .select('id_siswa, bulan, pts, unit')
     .eq('bulan', bulan)
     .in('id_siswa', ids)
 
+  if (unitBersih) queryLog = queryLog.eq('unit', unitBersih)
+
+  const { data: logs, error: galatLog } = await queryLog
+
   if (galatLog) return []
-  return mapPeringkatKelas(siswaKelas, (logs ?? []) as Record<string, unknown>[], bulan)
+  return mapPeringkatKelas(siswaKelas, (logs ?? []) as Record<string, unknown>[], bulan, unitBersih)
 }
 
 export function TertibPanel({
   idSiswa,
   namaSiswa,
   kelas,
+  unit,
   initialData,
   initialError,
   initialPeringkat = [],
@@ -71,6 +81,7 @@ export function TertibPanel({
   idSiswa: string
   namaSiswa: string
   kelas: string
+  unit: string
   initialData: TertibData
   initialError: string | null
   initialPeringkat?: BarisPeringkatKelas[]
@@ -94,7 +105,7 @@ export function TertibPanel({
 
   const refresh = useCallback(async () => {
     try {
-      const [next, papan] = await Promise.all([muatTertib(idSiswa, bulan), muatPeringkat(kelas, bulan)])
+      const [next, papan] = await Promise.all([muatTertib(idSiswa, bulan), muatPeringkat(kelas, unit, bulan)])
       setData(next)
       setPeringkat(papan)
       setError(null)
@@ -103,7 +114,7 @@ export function TertibPanel({
     } finally {
       setSinkron(false)
     }
-  }, [idSiswa, bulan, kelas])
+  }, [idSiswa, bulan, kelas, unit])
 
   useEffect(() => {
     setData(initialData)
@@ -177,46 +188,80 @@ export function TertibPanel({
               />
             </div>
 
-            <div className="mt-4 overflow-x-auto rounded-xl border">
+            <div className="mt-4 overflow-hidden rounded-xl border">
               <h3 className="border-b bg-muted/80 px-3 py-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Riwayat bulan {namaBulan}
               </h3>
               {data.items.length === 0 ? (
                 <p className="px-3 py-6 text-sm text-muted-foreground">Belum ada catatan poin pada bulan ini.</p>
               ) : (
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-semibold">Pelanggaran / prestasi</th>
-                      <th className="px-3 py-2 font-semibold">Poin</th>
-                      <th className="px-3 py-2 font-semibold">Catatan guru</th>
-                      <th className="px-3 py-2 font-semibold">Guru</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <>
+                  <ul className="divide-y sm:hidden">
                     {data.items.map((item) => (
-                      <tr key={item.id} className="border-t align-top">
-                        <td className="px-3 py-2.5 font-medium text-foreground">{item.label}</td>
-                        <td
-                          className={cn(
-                            'px-3 py-2.5 font-bold tabular-nums',
-                            item.points < 0 ? 'text-destructive' : 'text-success-foreground',
-                          )}
-                        >
-                          {item.points > 0 ? `+${item.points}` : item.points}
-                        </td>
-                        <td className="px-3 py-2.5 text-foreground/90">
-                          {item.keterangan ? (
-                            <span className="text-xs leading-relaxed">{item.keterangan}</span>
-                          ) : (
-                            <span className="text-xs italic text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.teacher}</td>
-                      </tr>
+                      <li key={item.id} className="px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <time className="block text-[11px] font-semibold tabular-nums tracking-wide text-muted-foreground">
+                              {item.tanggal}
+                            </time>
+                            <p className="mt-0.5 text-sm font-medium leading-snug text-foreground">{item.label}</p>
+                          </div>
+                          <span
+                            className={cn(
+                              'shrink-0 text-sm font-bold tabular-nums',
+                              item.points < 0 ? 'text-destructive' : 'text-success-foreground',
+                            )}
+                          >
+                            {item.points > 0 ? `+${item.points}` : item.points}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-xs leading-relaxed text-foreground/90">
+                          {item.keterangan || <span className="italic text-muted-foreground">Tidak ada catatan</span>}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">Guru: {item.teacher}</p>
+                      </li>
                     ))}
-                  </tbody>
-                </table>
+                  </ul>
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[560px] text-left text-sm">
+                      <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="whitespace-nowrap px-3 py-2 font-semibold">Tanggal</th>
+                          <th className="px-3 py-2 font-semibold">Pelanggaran / prestasi</th>
+                          <th className="px-3 py-2 font-semibold">Poin</th>
+                          <th className="px-3 py-2 font-semibold">Catatan guru</th>
+                          <th className="px-3 py-2 font-semibold">Guru</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.items.map((item) => (
+                          <tr key={item.id} className="border-t align-top">
+                            <td className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                              {item.tanggal}
+                            </td>
+                            <td className="px-3 py-2.5 font-medium text-foreground">{item.label}</td>
+                            <td
+                              className={cn(
+                                'px-3 py-2.5 font-bold tabular-nums',
+                                item.points < 0 ? 'text-destructive' : 'text-success-foreground',
+                              )}
+                            >
+                              {item.points > 0 ? `+${item.points}` : item.points}
+                            </td>
+                            <td className="px-3 py-2.5 text-foreground/90">
+                              {item.keterangan ? (
+                                <span className="text-xs leading-relaxed">{item.keterangan}</span>
+                              ) : (
+                                <span className="text-xs italic text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.teacher}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </>
