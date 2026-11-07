@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { todayIso } from '@/lib/format'
+import { kueriDenganUnit, muatSiswaUnit } from '@/lib/isolasi-kueri'
 import { getSupabase } from '@/lib/supabase'
 import type { ButirNotifikasi } from '@/lib/notifikasi-tipe'
 import { adaIsiTugas, sudahDikonfirmasi } from '@/lib/tugas-status'
@@ -52,20 +53,32 @@ function pengumumanAktif(): ButirNotifikasi[] {
   }))
 }
 
-async function barisSiswa<T>(tabel: 'setoran_qiroah' | 'setoran_tahfidz', kolom: string, idSiswa: string) {
+async function barisSiswa(tabel: 'setoran_qiroah' | 'setoran_tahfidz', kolom: string, idSiswa: string, unit: string) {
   const supabase = getSupabase()
-  const pertama = await supabase.from(tabel).select(kolom).eq('id_siswa', idSiswa).order('tanggal', { ascending: false }).limit(40)
-  if (pertama.error || (pertama.data?.length ?? 0) > 0 || !/^\d+$/.test(idSiswa)) return pertama
-  return supabase.from(tabel).select(kolom).eq('id_siswa', Number(idSiswa)).order('tanggal', { ascending: false }).limit(40)
+  const jalankan = (nilai: string | number) =>
+    kueriDenganUnit(
+      unit,
+      () =>
+        supabase.from(tabel).select(`${kolom},unit`).eq('id_siswa', nilai).eq('unit', unit).order('tanggal', { ascending: false }).limit(40),
+      () => supabase.from(tabel).select(kolom).eq('id_siswa', nilai).order('tanggal', { ascending: false }).limit(40),
+      { idSiswa: String(idSiswa) },
+    )
+
+  const pertama = await jalankan(idSiswa)
+  if (pertama.error || pertama.rows.length > 0 || !/^\d+$/.test(idSiswa)) return pertama
+  return jalankan(Number(idSiswa))
 }
 
 export async function getNotifikasiWali(idSiswa: string): Promise<{ item: ButirNotifikasi[]; error: string | null }> {
+  const siswa = await muatSiswaUnit(idSiswa)
+  if (!siswa) return { item: pengumumanAktif(), error: null }
+
   const [qiroah, tahfidz] = await Promise.all([
-    barisSiswa('setoran_qiroah', 'id_qiroah,tanggal,tugas_rumah,status_setoran', idSiswa),
-    barisSiswa('setoran_tahfidz', 'id_setoran,tanggal,tugas_rumah,konfirmasi_ortu', idSiswa),
+    barisSiswa('setoran_qiroah', 'id_qiroah,tanggal,tugas_rumah,status_setoran', idSiswa, siswa.unit),
+    barisSiswa('setoran_tahfidz', 'id_setoran,tanggal,tugas_rumah,konfirmasi_ortu', idSiswa, siswa.unit),
   ])
 
-  const tugasQiroah = ((qiroah.data || []) as Record<string, unknown>[])
+  const tugasQiroah = qiroah.rows
     .filter((row) => teks(row.id_qiroah) && adaIsiTugas(teks(row.tugas_rumah)) && !sudahDikonfirmasi(teks(row.status_setoran)))
     .slice(0, 5)
     .map((row) => ({
@@ -75,7 +88,7 @@ export async function getNotifikasiWali(idSiswa: string): Promise<{ item: ButirN
       href: '/qiroah#tugas-rumah',
     }))
 
-  const tugasTahfidz = ((tahfidz.data || []) as Record<string, unknown>[])
+  const tugasTahfidz = tahfidz.rows
     .filter((row) => teks(row.id_setoran) && adaIsiTugas(teks(row.tugas_rumah)) && !sudahDikonfirmasi(teks(row.konfirmasi_ortu)))
     .slice(0, 5)
     .map((row) => ({

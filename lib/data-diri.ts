@@ -3,6 +3,8 @@ import 'server-only'
 import { getSupabase } from '@/lib/supabase'
 import { isStudentId } from '@/lib/student-id'
 import { KOLOM_EDIT, KOLOM_IDENTITAS, KOLOM_PENTING, type DataDiri } from '@/lib/data-diri-shared'
+import { kueriDenganUnit, muatSiswaUnit } from '@/lib/isolasi-kueri'
+import { unitLogin, unitSama } from '@/lib/unit-isolasi'
 
 const KOLOM = [...KOLOM_IDENTITAS, ...KOLOM_EDIT].join(',')
 
@@ -58,47 +60,67 @@ function kunciPencarian(idSiswa: string, nis: string) {
   return [...new Set([ekor, nis, idSiswa].flatMap(varianNomor))]
 }
 
-function pilihBaris(rows: Record<string, unknown>[], nama: string, kelas: string) {
-  if (rows.length === 1) return rows[0]
-  const samaKelas = rows.filter((row) => normNama(teks(row.nama_lengkap)) === nama && teks(row.kelas).toUpperCase() === kelas)
+function pilihBaris(rows: Record<string, unknown>[], nama: string, kelas: string, unit: string) {
+  const unitAktif = unitLogin(unit)
+  const dalamUnit = unitAktif
+    ? rows.filter((row) => {
+        const unitBaris = teks(row.unit)
+        return !unitBaris || unitSama(unitBaris, unitAktif)
+      })
+    : rows
+  if (dalamUnit.length === 1) return dalamUnit[0]
+  const samaKelas = dalamUnit.filter(
+    (row) => normNama(teks(row.nama_lengkap)) === nama && teks(row.kelas).toUpperCase() === kelas,
+  )
   if (samaKelas.length === 1) return samaKelas[0]
-  const samaNama = rows.filter((row) => normNama(teks(row.nama_lengkap)) === nama)
+  const samaNama = dalamUnit.filter((row) => normNama(teks(row.nama_lengkap)) === nama)
   return samaNama.length === 1 ? samaNama[0] : null
 }
 
-async function ambilDenganNomor(nomor: string) {
+async function ambilDenganNomor(nomor: string, unit: string) {
   const supabase = getSupabase()
   const angka = /^\d+$/.test(nomor) ? String(Number(nomor)) : ''
   const percobaan: Array<string | number> = angka && angka !== nomor ? [nomor, Number(nomor)] : [nomor]
+  const unitAktif = unitLogin(unit)
   let galat = false
   for (const nilai of percobaan) {
-    const { data, error } = await supabase.from('data_diri_siswa').select(KOLOM).eq('nomor_induk_sekolah', nilai).limit(2)
+    const { rows, error } = await kueriDenganUnit(
+      unitAktif,
+      () => supabase.from('data_diri_siswa').select(`${KOLOM},unit`).eq('nomor_induk_sekolah', nilai).eq('unit', unitAktif).limit(5),
+      () => supabase.from('data_diri_siswa').select(KOLOM).eq('nomor_induk_sekolah', nilai).limit(5),
+    )
     if (error) {
       galat = true
       continue
     }
-    const rows = (data || []) as unknown as Record<string, unknown>[]
     if (rows.length > 0 || percobaan.length === 1) return { rows, error: null }
   }
   return { rows: [] as Record<string, unknown>[], error: galat ? 'Buku induk belum bisa dimuat.' : null }
 }
 
-async function cariLewatNama(nama: string, kelas: string) {
+async function cariLewatNama(nama: string, kelas: string, unit: string) {
   const supabase = getSupabase()
-  const rows: Record<string, unknown>[] = []
-  for (let dari = 0; dari < 5000; dari += 1000) {
-    const { data, error } = await supabase
-      .from('data_diri_siswa')
-      .select('nama_lengkap,kelas,nomor_induk_sekolah')
-      .range(dari, dari + 999)
-    if (error) return { data: null, error: 'Buku induk belum bisa dimuat.' }
-    rows.push(...((data || []) as unknown as Record<string, unknown>[]))
-    if (!data || data.length < 1000) break
-  }
+  const unitAktif = unitLogin(unit)
+  const { rows, error } = await kueriDenganUnit(
+    unitAktif,
+    () =>
+      supabase
+        .from('data_diri_siswa')
+        .select('nama_lengkap,kelas,nomor_induk_sekolah,unit')
+        .eq('kelas', kelas)
+        .eq('unit', unitAktif)
+        .limit(200),
+    () =>
+      supabase
+        .from('data_diri_siswa')
+        .select('nama_lengkap,kelas,nomor_induk_sekolah')
+        .eq('kelas', kelas)
+        .limit(200),
+  )
+  if (error) return { data: null, error: 'Buku induk belum bisa dimuat.' }
 
   const samaNama = rows.filter((row) => normNama(teks(row.nama_lengkap)) === nama)
-  const samaKelas = samaNama.filter((row) => teks(row.kelas).toUpperCase() === kelas)
-  const pilih = samaKelas[0] || (samaNama.length === 1 ? samaNama[0] : null)
+  const pilih = samaNama.length === 1 ? samaNama[0] : pilihBaris(samaNama, nama, kelas, unitAktif)
   if (!pilih) {
     return {
       data: null,
@@ -106,7 +128,7 @@ async function cariLewatNama(nama: string, kelas: string) {
     }
   }
 
-  const penuh = await ambilDenganNomor(teks(pilih.nomor_induk_sekolah))
+  const penuh = await ambilDenganNomor(teks(pilih.nomor_induk_sekolah), unitAktif)
   if (penuh.error) return { data: null, error: penuh.error }
   const ketemu = penuh.rows.find((row) => normNama(teks(row.nama_lengkap)) === nama) || penuh.rows[0] || null
   return { data: ketemu, error: null }
@@ -115,24 +137,23 @@ async function cariLewatNama(nama: string, kelas: string) {
 export async function getDataDiriSiswa(idSiswa: string): Promise<HasilDataDiri> {
   if (!isStudentId(idSiswa)) return { data: null, error: 'Akun siswa tidak dikenali.', kurang: [] }
 
-  const supabase = getSupabase()
-  const siswa = await supabase.from('siswa').select('nama_siswa,kelas,nis').eq('id_siswa', idSiswa).maybeSingle()
-  if (siswa.error || !siswa.data) return { data: null, error: 'Data siswa belum bisa dimuat.', kurang: [] }
+  const siswa = await muatSiswaUnit(idSiswa)
+  if (!siswa) return { data: null, error: 'Data siswa belum bisa dimuat.', kurang: [] }
 
-  // Buku induk tidak menyimpan id_siswa. Nomor induk 4 digit sama dengan akhir id_siswa, atau sama dengan NIS bila terisi.
-  const nama = normNama(teks(siswa.data.nama_siswa))
-  const kelas = teks(siswa.data.kelas).toUpperCase()
-  for (const nomor of kunciPencarian(idSiswa, teks(siswa.data.nis))) {
-    const hasil = await ambilDenganNomor(nomor)
+  const nama = normNama(siswa.nama)
+  const kelas = siswa.kelas.toUpperCase()
+  const unitAktif = siswa.unit
+  for (const nomor of kunciPencarian(idSiswa, siswa.nis)) {
+    const hasil = await ambilDenganNomor(nomor, unitAktif)
     if (hasil.error) return { data: null, error: hasil.error, kurang: [] }
-    const baris = pilihBaris(hasil.rows, nama, kelas)
+    const baris = pilihBaris(hasil.rows, nama, kelas, unitAktif)
     if (baris) {
       const data = keData(baris)
       return { data, error: null, kurang: kolomKosong(data) }
     }
   }
 
-  const lewatNama = await cariLewatNama(nama, kelas)
+  const lewatNama = await cariLewatNama(nama, kelas, unitAktif)
   if (lewatNama.error || !lewatNama.data) return { data: null, error: lewatNama.error, kurang: [] }
   const data = keData(lewatNama.data)
   return { data, error: null, kurang: kolomKosong(data) }

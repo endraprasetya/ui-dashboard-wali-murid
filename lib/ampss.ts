@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { muatSiswaUnit } from '@/lib/isolasi-kueri'
 import { isStudentId } from '@/lib/student-id'
 import { parseAmpss, type HasilParseAmpss } from '@/lib/ampss-parse'
 
@@ -88,13 +89,17 @@ async function tarik(username: string): Promise<HasilKeuanganAmpss> {
 
 export async function ambilKeuanganAmpss(idSiswa: string, nis = ''): Promise<HasilKeuanganAmpss> {
   if (!isStudentId(idSiswa)) return { ...kosong, error: 'Akun siswa tidak dikenali.' }
+  const siswa = await muatSiswaUnit(idSiswa)
+  if (!siswa) return { ...kosong, error: 'Akun siswa tidak dikenali.' }
 
   const tersimpan = cache.get(idSiswa)
   if (tersimpan && Date.now() - tersimpan.waktu < (tersimpan.hasil.error ? UMUR_GAGAL : UMUR_BERHASIL)) {
     return tersimpan.hasil
   }
 
-  const urutan = [idSiswa, nis.trim()].filter((nilai, indeks, daftar) => usernameAman(nilai) && daftar.indexOf(nilai) === indeks)
+  const urutan = [idSiswa, nis.trim() || siswa.nis].filter(
+    (nilai, indeks, daftar) => usernameAman(nilai) && daftar.indexOf(nilai) === indeks,
+  )
   let hasil = await tarik(urutan[0] || idSiswa)
   if (hasil.error && urutan[1]) hasil = await tarik(urutan[1])
   cache.set(idSiswa, { waktu: Date.now(), hasil })

@@ -3,6 +3,7 @@
 import { updateTag } from 'next/cache'
 import { getDataDiriSiswa } from '@/lib/data-diri'
 import { KOLOM_EDIT } from '@/lib/data-diri-shared'
+import { muatSiswaUnit } from '@/lib/isolasi-kueri'
 import { getSession } from '@/lib/session'
 import { getSupabase } from '@/lib/supabase'
 import type { DataDiri } from '@/lib/data-diri-shared'
@@ -32,6 +33,9 @@ function nilaiKolom(kunci: (typeof KOLOM_EDIT)[number], mentah: FormDataEntryVal
 export async function updateDataDiri(formData: FormData): Promise<{ error: string | null }> {
   const session = await getSession()
   if (!session) return { error: 'Sesi berakhir. Silakan masuk lagi.' }
+
+  const siswa = await muatSiswaUnit(session.idSiswa)
+  if (!siswa) return { error: 'Data siswa belum bisa dimuat.' }
 
   const saatIni = await getDataDiriSiswa(session.idSiswa)
   if (saatIni.error) return { error: saatIni.error }
@@ -67,10 +71,9 @@ export async function updateDataDiri(formData: FormData): Promise<{ error: strin
   }
 
   if (namaBaru !== namaLama) {
-    const { error: errSiswa } = await supabase
-      .from('siswa')
-      .update({ nama_siswa: namaBaru })
-      .eq('id_siswa', session.idSiswa)
+    let ubahSiswa = supabase.from('siswa').update({ nama_siswa: namaBaru }).eq('id_siswa', session.idSiswa)
+    if (siswa.unit) ubahSiswa = ubahSiswa.eq('unit', siswa.unit)
+    const { error: errSiswa } = await ubahSiswa
     if (errSiswa) {
       return { error: 'Nama di buku induk tersimpan, tetapi gagal memperbarui data siswa. Hubungi sekolah.' }
     }

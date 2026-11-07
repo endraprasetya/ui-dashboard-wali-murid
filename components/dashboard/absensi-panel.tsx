@@ -4,32 +4,82 @@ import { CalendarDays, Table2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildAbsensiSiswaFromJurnal, monthRange, type RekapAbsensiJurnal } from '@/lib/absensi-siswa-logic'
 import { currentMonthKey, todayIso } from '@/lib/format'
+import { saringJurnalUnit, type RosterIsolasiJurnal } from '@/lib/jurnal-isolasi'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
+import { kolomUnitTidakAda, unitLogin, unitSama } from '@/lib/unit-isolasi'
 import { cn } from '@/lib/utils'
 import { AbsensiChart } from './absensi-chart'
 import { DashboardCard } from './dashboard-card'
 import { ModuleMessage } from './module-message'
 
-async function muatJurnalBulan(kelas: string, bulan: string) {
-  const { start, end } = monthRange(bulan)
+async function muatRosterKelas(kelas: string, unit: string): Promise<RosterIsolasiJurnal> {
+  const unitAktif = unitLogin(unit)
   const supabase = getSupabaseBrowser()
   const kunci = normalKelasJurnal(kelas)
-  const kolom =
-    'id, tanggal, kelas, mapel, jam, siswa_tidak_hadir, guru, nama_guru, nama_ustadz'
+  let query = supabase.from('siswa').select('id_siswa,nama_siswa,kelas,unit').eq('kelas', kelas).not('kelas', 'ilike', '%Alumni%').limit(800)
+  const { data } = await query
+  const rosterIds = new Set<string>()
+  const rosterNama = new Set<string>()
+  const idsUnitLain = new Set<string>()
+  const namaUnitLain = new Set<string>()
+  for (const row of data || []) {
+    if (normalKelasJurnal(String(row.kelas || '')) !== kunci) continue
+    const id = String(row.id_siswa || '').trim()
+    const nama = String(row.nama_siswa || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (unitAktif && unitSama(row.unit, unitAktif)) {
+      if (id) rosterIds.add(id)
+      if (nama) rosterNama.add(nama)
+    } else if (unitAktif) {
+      if (id) idsUnitLain.add(id)
+      if (nama) namaUnitLain.add(nama)
+    }
+  }
+  return { unit: unitAktif, kelas, rosterIds, rosterNama, idsUnitLain, namaUnitLain, ukuranKelas: rosterIds.size }
+}
 
-  const { data, error } = await supabase
+async function muatJurnalBulan(kelas: string, unit: string, bulan: string) {
+  const unitAktif = unitLogin(unit)
+  if (!kelas.trim() || !unitAktif) return []
+  const { start, end } = monthRange(bulan)
+  const supabase = getSupabaseBrowser()
+  const variasi = Array.from(
+    new Set([kelas, kelas.replace(/\s+/g, ''), kelas.replace(/\s+/g, ' ').trim(), `Kelas ${kelas}`].filter(Boolean)),
+  )
+  const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
+  const kolom = 'id, tanggal, kelas, mapel, jam, siswa_tidak_hadir, guru, nama_guru, nama_ustadz, hadir, tidak_hadir'
+  const roster = await muatRosterKelas(kelas, unitAktif)
+
+  let query = supabase
     .from('jurnal_pembelajaran')
-    .select(kolom)
+    .select(`${kolom}, unit`)
     .gte('tanggal', start)
     .lte('tanggal', end)
+    .or(filterKelas)
+    .eq('unit', unitAktif)
     .order('tanggal', { ascending: true })
-    .limit(2000)
+    .limit(800)
+
+  let { data, error } = await query
+  if (error && kolomUnitTidakAda(error)) {
+    const ulang = await supabase
+      .from('jurnal_pembelajaran')
+      .select(kolom)
+      .gte('tanggal', start)
+      .lte('tanggal', end)
+      .or(filterKelas)
+      .order('tanggal', { ascending: true })
+      .limit(800)
+    data = ulang.data
+    error = ulang.error
+  }
 
   if (error) throw error
-  return ((data ?? []) as Record<string, unknown>[]).filter(
-    (row) => normalKelasJurnal(String(row.kelas || '')) === kunci,
-  )
+  return saringJurnalUnit((data ?? []) as Record<string, unknown>[], roster)
 }
 
 function tanggalDefaultFilter(rekap: RekapAbsensiJurnal, bulan: string) {
@@ -60,12 +110,14 @@ export function AbsensiPanel({
   idSiswa,
   namaSiswa,
   kelas,
+  unit,
   initialRekap,
   initialError,
 }: {
   idSiswa: string
   namaSiswa: string
   kelas: string
+  unit: string
   initialRekap: RekapAbsensiJurnal
   initialError: string | null
 }) {
@@ -98,7 +150,7 @@ export function AbsensiPanel({
       setLoading(true)
       setError(null)
       try {
-        const rows = await muatJurnalBulan(kelas, monthValue)
+        const rows = await muatJurnalBulan(kelas, unit, monthValue)
         setRekap(
           buildAbsensiSiswaFromJurnal(rows, {
             idSiswa,
@@ -112,7 +164,7 @@ export function AbsensiPanel({
         setLoading(false)
       }
     },
-    [idSiswa, namaSiswa, kelas],
+    [idSiswa, namaSiswa, kelas, unit],
   )
 
   const onBulanChange = (value: string) => {

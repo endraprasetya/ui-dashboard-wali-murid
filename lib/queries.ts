@@ -15,9 +15,11 @@ import { isStudentId } from '@/lib/student-id'
 import { buildTertibData, emptyTertibData, mapPeringkatKelas, TERTIB_POINT_SELECT } from '@/lib/tertib-data'
 import type { BarisPeringkatKelas } from '@/lib/tertib-saldo'
 import { getAbsensiJurnalSiswa } from '@/lib/absensi-jurnal-wali'
+import { kueriDenganUnit, muatSiswaUnit, rosterJurnalUnit } from '@/lib/isolasi-kueri'
+import { saringJurnalUnit } from '@/lib/jurnal-isolasi'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
-import { unitLogin, unitSama } from '@/lib/unit-isolasi'
+import { kolomUnitTidakAda, unitLogin, unitSama } from '@/lib/unit-isolasi'
 
 export type QueryResult<T> = {
   data: T
@@ -435,25 +437,43 @@ export async function getStudent(idSiswa: string): Promise<QueryResult<StudentPr
   return { data: data ? toStudent(data) : null, error: null }
 }
 
-export async function getTahfidz(idSiswa: string): Promise<QueryResult<TahfidzData>> {
+export async function getTahfidz(idSiswa: string, unit = ''): Promise<QueryResult<TahfidzData>> {
   assertStudentId(idSiswa)
+  const siswa = await muatSiswaUnit(idSiswa)
+  const unitAktif = unitLogin(unit) || siswa?.unit || ''
+  if (!siswa || (unitAktif && siswa.unit && !unitSama(siswa.unit, unitAktif))) {
+    return { data: emptyTahfidz, error: siswa ? 'Data tahfidz di luar unit ananda.' : 'Data siswa belum bisa dimuat.' }
+  }
 
+  const kolom =
+    'id_setoran, tanggal, id_siswa, hafalan_baru, murojaah, keterangan_pesan_hafalan, keterangan, tugas_rumah, nama_ustadz, surah, ayat_mulai, ayat_selesai, status, tipe_tugas, konfirmasi_ortu, surah_ziyadah, ayat_ziyadah, surah_murojaah, ayat_murojaah, surah_tugas, ayat_mulai_tugas, ayat_selesai_tugas'
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('setoran_tahfidz')
-    .select(
-      'id_setoran, tanggal, id_siswa, hafalan_baru, murojaah, keterangan_pesan_hafalan, keterangan, tugas_rumah, nama_ustadz, surah, ayat_mulai, ayat_selesai, status, tipe_tugas, konfirmasi_ortu, surah_ziyadah, ayat_ziyadah, surah_murojaah, ayat_murojaah, surah_tugas, ayat_mulai_tugas, ayat_selesai_tugas',
-    )
-    .eq('id_siswa', idSiswa)
-    .order('tanggal', { ascending: false })
-    .limit(200)
+  const { rows, error } = await kueriDenganUnit(
+    unitAktif,
+    () =>
+      supabase
+        .from('setoran_tahfidz')
+        .select(`${kolom}, unit`)
+        .eq('id_siswa', idSiswa)
+        .eq('unit', unitAktif)
+        .order('tanggal', { ascending: false })
+        .limit(200),
+    () =>
+      supabase
+        .from('setoran_tahfidz')
+        .select(kolom)
+        .eq('id_siswa', idSiswa)
+        .order('tanggal', { ascending: false })
+        .limit(200),
+    { idSiswa },
+  )
 
   if (error) {
     logQueryError('tahfidz', error)
     return { data: emptyTahfidz, error: 'Riwayat tahfidz belum bisa dimuat.' }
   }
 
-  const history = sortedRows((data ?? []) as Record<string, unknown>[]).map(toTahfidz)
+  const history = sortedRows(rows).map(toTahfidz)
   const lancar = history.filter((entry) => /(lancar|selesai)/i.test(entry.status)).length
 
   return {
@@ -467,23 +487,42 @@ export async function getTahfidz(idSiswa: string): Promise<QueryResult<TahfidzDa
   }
 }
 
-export async function getQiroah(idSiswa: string): Promise<QueryResult<QiroahData>> {
+export async function getQiroah(idSiswa: string, unit = ''): Promise<QueryResult<QiroahData>> {
   assertStudentId(idSiswa)
+  const siswa = await muatSiswaUnit(idSiswa)
+  const unitAktif = unitLogin(unit) || siswa?.unit || ''
+  if (!siswa || (unitAktif && siswa.unit && !unitSama(siswa.unit, unitAktif))) {
+    return { data: emptyQiroah, error: siswa ? 'Data qiroah di luar unit ananda.' : 'Data siswa belum bisa dimuat.' }
+  }
 
+  const kolom = 'id_qiroah, tanggal, id_siswa, ustadz, jilid, halaman, status, catatan, tugas_rumah, status_setoran, nilai'
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('setoran_qiroah')
-    .select('id_qiroah, tanggal, id_siswa, ustadz, jilid, halaman, status, catatan, tugas_rumah, status_setoran, nilai')
-    .eq('id_siswa', idSiswa)
-    .order('tanggal', { ascending: false })
-    .limit(200)
+  const { rows, error } = await kueriDenganUnit(
+    unitAktif,
+    () =>
+      supabase
+        .from('setoran_qiroah')
+        .select(`${kolom}, unit`)
+        .eq('id_siswa', idSiswa)
+        .eq('unit', unitAktif)
+        .order('tanggal', { ascending: false })
+        .limit(200),
+    () =>
+      supabase
+        .from('setoran_qiroah')
+        .select(kolom)
+        .eq('id_siswa', idSiswa)
+        .order('tanggal', { ascending: false })
+        .limit(200),
+    { idSiswa },
+  )
 
   if (error) {
     logQueryError('qiroah', error)
     return { data: emptyQiroah, error: 'Progres qiroah belum bisa dimuat.' }
   }
 
-  const recent = sortedRows((data ?? []) as Record<string, unknown>[]).map(toQiroah)
+  const recent = sortedRows(rows).map(toQiroah)
 
   return {
     data: {
@@ -495,9 +534,10 @@ export async function getQiroah(idSiswa: string): Promise<QueryResult<QiroahData
   }
 }
 
-export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[]>> {
+export async function getJurnal(kelas: string, unit = ''): Promise<QueryResult<JurnalEntry[]>> {
   const className = kelas.trim()
-  if (!className) return { data: [], error: null }
+  const unitAktif = unitLogin(unit)
+  if (!className || !unitAktif) return { data: [], error: null }
 
   const kunci = normalKelasJurnal(className)
   const variasi = Array.from(
@@ -507,28 +547,43 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
       ),
     ),
   )
+  const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
   const kolomDenganGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas, guru'
   const kolomTanpaGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas'
   const supabase = getSupabase()
+  const roster = await rosterJurnalUnit(className, unitAktif)
   const cocokKelas = (daftar: Record<string, unknown>[]) =>
-    daftar.filter((row) => normalKelasJurnal(text(row.kelas)) === kunci)
+    saringJurnalUnit(
+      daftar.filter((row) => normalKelasJurnal(text(row.kelas)) === kunci),
+      roster,
+    )
 
   async function ambil(kolom: string) {
-    const pertama = await supabase
-      .from('jurnal_pembelajaran')
-      .select(kolom)
-      .or(variasi.map((nama) => `kelas.eq.${nama}`).join(','))
-      .order('tanggal', { ascending: false })
-      .limit(400)
+    const { rows, error } = await kueriDenganUnit(
+      unitAktif,
+      () =>
+        supabase
+          .from('jurnal_pembelajaran')
+          .select(`${kolom}, unit`)
+          .or(filterKelas)
+          .eq('unit', unitAktif)
+          .order('tanggal', { ascending: false })
+          .limit(400),
+      () =>
+        supabase
+          .from('jurnal_pembelajaran')
+          .select(kolom)
+          .or(filterKelas)
+          .order('tanggal', { ascending: false })
+          .limit(400),
+    )
 
-    let rows = ((pertama.data ?? []) as Record<string, unknown>[])
-    if (pertama.error && !kolomGuruTidakAda(pertama.error)) logQueryError('jurnal', pertama.error)
-
-    if (pertama.error && !kolomGuruTidakAda(pertama.error)) {
-      return { rows: [] as Record<string, unknown>[], error: pertama.error }
+    if (error && !kolomGuruTidakAda(error)) logQueryError('jurnal', error)
+    if (error && !kolomGuruTidakAda(error)) {
+      return { rows: [] as Record<string, unknown>[], error }
     }
 
-    return { rows: cocokKelas(rows), error: kolomGuruTidakAda(pertama.error) ? pertama.error : null }
+    return { rows: cocokKelas(rows), error: kolomGuruTidakAda(error) ? error : null }
   }
 
   let hasil = await ambil(kolomDenganGuru)
@@ -538,9 +593,8 @@ export async function getJurnal(kelas: string): Promise<QueryResult<JurnalEntry[
   if (hasil.error && !kolomGuruTidakAda(hasil.error) && hasil.rows.length === 0) {
     return { data: [], error: 'Jurnal pembelajaran belum bisa dimuat.' }
   }
-  const rows = hasil.rows
 
-  const entries = sortedRows(cocokKelas(rows).filter(jurnalBerisi)).map(toJurnal)
+  const entries = sortedRows(cocokKelas(hasil.rows).filter(jurnalBerisi)).map(toJurnal)
   return { data: entries, error: null }
 }
 
@@ -556,6 +610,7 @@ export async function getAbsensi(idSiswa: string): Promise<QueryResult<Attendanc
     idSiswa,
     namaSiswa: profil.data.name,
     kelas: profil.data.kelas,
+    unit: profil.data.unit,
   })
 
   if (error) {
@@ -585,16 +640,34 @@ export async function getAbsensi(idSiswa: string): Promise<QueryResult<Attendanc
   }
 }
 
-export async function getTertib(idSiswa: string): Promise<QueryResult<TertibData>> {
+export async function getTertib(idSiswa: string, unit = ''): Promise<QueryResult<TertibData>> {
   assertStudentId(idSiswa)
+  const siswa = await muatSiswaUnit(idSiswa)
+  const unitAktif = unitLogin(unit) || siswa?.unit || ''
+  if (!siswa || (unitAktif && siswa.unit && !unitSama(siswa.unit, unitAktif))) {
+    return { data: emptyTertib, error: siswa ? 'Catatan ketertiban di luar unit ananda.' : 'Data siswa belum bisa dimuat.' }
+  }
 
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('tertib_point')
-    .select(TERTIB_POINT_SELECT)
-    .eq('id_siswa', idSiswa)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  const { rows, error } = await kueriDenganUnit(
+    unitAktif,
+    () =>
+      supabase
+        .from('tertib_point')
+        .select(`${TERTIB_POINT_SELECT}, unit`)
+        .eq('id_siswa', idSiswa)
+        .eq('unit', unitAktif)
+        .order('created_at', { ascending: false })
+        .limit(50),
+    () =>
+      supabase
+        .from('tertib_point')
+        .select(TERTIB_POINT_SELECT)
+        .eq('id_siswa', idSiswa)
+        .order('created_at', { ascending: false })
+        .limit(50),
+    { idSiswa },
+  )
 
   if (error) {
     logQueryError('tertib', error)
@@ -603,7 +676,7 @@ export async function getTertib(idSiswa: string): Promise<QueryResult<TertibData
 
   const bulan = currentMonthKey()
   return {
-    data: buildTertibData((data ?? []) as Record<string, unknown>[], idSiswa, bulan),
+    data: buildTertibData(rows, idSiswa, bulan),
     error: null,
   }
 }
@@ -616,7 +689,7 @@ export async function getTertibPeringkatKelas(
 ): Promise<BarisPeringkatKelas[]> {
   const className = kelas.trim()
   const unitAktif = unitLogin(unit)
-  if (!className || !isStudentId(idSiswa)) return []
+  if (!className || !unitAktif || !isStudentId(idSiswa)) return []
 
   const supabase = getSupabase()
   let querySiswa = supabase
@@ -628,11 +701,19 @@ export async function getTertibPeringkatKelas(
 
   if (unitAktif) querySiswa = querySiswa.eq('unit', unitAktif)
 
-  const { data: siswaKelas, error: galatSiswa } = await querySiswa
+  let { data: siswaKelas, error: galatSiswa } = await querySiswa
+  let daftarSiswa = (siswaKelas ?? []).filter((row) => unitSama(row.unit, unitAktif))
 
-  const daftarSiswa = (siswaKelas ?? []).filter((row) =>
-    unitAktif ? unitSama(row.unit, unitAktif) : true,
-  )
+  if (!galatSiswa && daftarSiswa.length === 0) {
+    const longgar = await supabase
+      .from('siswa')
+      .select('id_siswa, nama_siswa, kelas, unit')
+      .eq('kelas', className)
+      .not('kelas', 'ilike', '%Alumni%')
+      .order('nama_siswa', { ascending: true })
+    daftarSiswa = (longgar.data ?? []).filter((row) => unitSama(row.unit, unitAktif))
+    galatSiswa = longgar.error
+  }
 
   if (galatSiswa || !daftarSiswa.length) {
     if (galatSiswa) logQueryError('siswa-kelas-tertib', galatSiswa)
@@ -648,7 +729,16 @@ export async function getTertibPeringkatKelas(
 
   if (unitAktif) queryLog = queryLog.eq('unit', unitAktif)
 
-  const { data: logs, error: galatLog } = await queryLog
+  let { data: logs, error: galatLog } = await queryLog
+  if (galatLog && kolomUnitTidakAda(galatLog)) {
+    const ulang = await supabase
+      .from('tertib_point')
+      .select('id_siswa, bulan, pts')
+      .eq('bulan', bulan)
+      .in('id_siswa', ids)
+    logs = ulang.data
+    galatLog = ulang.error
+  }
 
   if (galatLog) {
     logQueryError('tertib-peringkat', galatLog)
@@ -688,13 +778,14 @@ export async function getDashboard(idSiswa: string): Promise<DashboardData> {
     }
   }
 
+  const unit = studentResult.data.unit
   const [tahfidz, qiroah, jurnal, absensi, tertib, infoUjian] = await Promise.all([
-    getTahfidz(idSiswa),
-    getQiroah(idSiswa),
-    getJurnal(studentResult.data.kelas),
+    getTahfidz(idSiswa, unit),
+    getQiroah(idSiswa, unit),
+    getJurnal(studentResult.data.kelas, unit),
     getAbsensi(idSiswa),
-    getTertib(idSiswa),
-    getInfoUjian(idSiswa),
+    getTertib(idSiswa, unit),
+    getInfoUjian(idSiswa, unit),
   ])
 
   return {
@@ -731,25 +822,55 @@ function kunciJilid(value: unknown) {
   return teks
 }
 
-export async function getInfoUjian(idSiswa: string): Promise<InfoUjian> {
+export async function getInfoUjian(idSiswa: string, unit = ''): Promise<InfoUjian> {
+  const siswa = isStudentId(idSiswa) ? await muatSiswaUnit(idSiswa) : null
+  const unitAktif = unitLogin(unit) || siswa?.unit || ''
+  if (!siswa || (unitAktif && siswa.unit && !unitSama(siswa.unit, unitAktif))) {
+    return { berlangsung: null, hasil: [] }
+  }
+
   const supabase = getSupabase()
   const [pengajuan, rekapan] = await Promise.all([
-    supabase
-      .from('pengajuan')
-      .select('id_pengajuan, jilid_diujikan, tanggal_pelaksanaan, tanggal_diajukan, nama_penguji, status, id_siswa')
-      .eq('id_siswa', idSiswa),
-    supabase
-      .from('rekapan')
-      .select(
-        'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan',
-      )
-      .eq('id_siswa', idSiswa),
+    kueriDenganUnit(
+      unitAktif,
+      () =>
+        supabase
+          .from('pengajuan')
+          .select('id_pengajuan, jilid_diujikan, tanggal_pelaksanaan, tanggal_diajukan, nama_penguji, status, id_siswa, unit')
+          .eq('id_siswa', idSiswa)
+          .eq('unit', unitAktif),
+      () =>
+        supabase
+          .from('pengajuan')
+          .select('id_pengajuan, jilid_diujikan, tanggal_pelaksanaan, tanggal_diajukan, nama_penguji, status, id_siswa')
+          .eq('id_siswa', idSiswa),
+      { idSiswa },
+    ),
+    kueriDenganUnit(
+      unitAktif,
+      () =>
+        supabase
+          .from('rekapan')
+          .select(
+            'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan, unit',
+          )
+          .eq('id_siswa', idSiswa)
+          .eq('unit', unitAktif),
+      () =>
+        supabase
+          .from('rekapan')
+          .select(
+            'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan',
+          )
+          .eq('id_siswa', idSiswa),
+      { idSiswa },
+    ),
   ])
 
   if (pengajuan.error) logQueryError('jadwal ujian', pengajuan.error)
   if (rekapan.error) logQueryError('rekapan ujian', rekapan.error)
 
-  const daftarRekap = (rekapan.error ? [] : rekapan.data || []) as Record<string, unknown>[]
+  const daftarRekap = rekapan.rows as Record<string, unknown>[]
   const jilidSelesai = new Set(daftarRekap.map((row) => kunciJilid(row.jilid_asal)).filter(Boolean))
   const hasil = [...daftarRekap]
     .sort((a, b) => text(b.tanggal_ujian).localeCompare(text(a.tanggal_ujian)))
@@ -766,7 +887,7 @@ export async function getInfoUjian(idSiswa: string): Promise<InfoUjian> {
     }))
 
   const hariIni = todayIso()
-  const daftar = (pengajuan.error ? [] : pengajuan.data || [])
+  const daftar = pengajuan.rows
     .map((row) => {
       if (jilidSelesai.has(kunciJilid(row.jilid_diujikan))) return null
       const status = pecahStatusUjian(row.status)

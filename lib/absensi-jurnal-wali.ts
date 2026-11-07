@@ -2,9 +2,12 @@ import 'server-only'
 
 import { buildAbsensiSiswaFromJurnal, monthRange, type RekapAbsensiJurnal } from '@/lib/absensi-siswa-logic'
 import { currentMonthKey } from '@/lib/format'
+import { kueriDenganUnit, rosterJurnalUnit } from '@/lib/isolasi-kueri'
+import { saringJurnalUnit } from '@/lib/jurnal-isolasi'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { isStudentId } from '@/lib/student-id'
 import { getSupabase } from '@/lib/supabase'
+import { unitLogin } from '@/lib/unit-isolasi'
 
 function kolomGuruTidakAda(error?: { code?: string; message?: string } | null) {
   const pesan = String(error?.message || '').toLowerCase()
@@ -15,9 +18,10 @@ function kolomGuruTidakAda(error?: { code?: string; message?: string } | null) {
   )
 }
 
-async function fetchJurnalKelasRentang(kelas: string, start: string, end: string) {
+async function fetchJurnalKelasRentang(kelas: string, unit: string, start: string, end: string) {
   const className = kelas.trim()
-  if (!className) return { rows: [] as Record<string, unknown>[], error: null as { message?: string } | null }
+  const unitAktif = unitLogin(unit)
+  if (!className || !unitAktif) return { rows: [] as Record<string, unknown>[], error: null as { message?: string } | null }
 
   const kunci = normalKelasJurnal(className)
   const variasi = Array.from(
@@ -33,8 +37,12 @@ async function fetchJurnalKelasRentang(kelas: string, start: string, end: string
     'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, siswa_tidak_hadir'
 
   const supabase = getSupabase()
+  const roster = await rosterJurnalUnit(className, unitAktif)
   const cocokKelas = (daftar: Record<string, unknown>[]) =>
-    daftar.filter((row) => normalKelasJurnal(String(row.kelas || '')) === kunci)
+    saringJurnalUnit(
+      daftar.filter((row) => normalKelasJurnal(String(row.kelas || '')) === kunci),
+      roster,
+    )
 
   async function ambil(kolom: string) {
     const pageSize = 1000
@@ -44,20 +52,31 @@ async function fetchJurnalKelasRentang(kelas: string, start: string, end: string
     const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
 
     while (true) {
-      let query = supabase
-        .from('jurnal_pembelajaran')
-        .select(kolom)
-        .gte('tanggal', start)
-        .lte('tanggal', end)
-        .or(filterKelas)
-        .order('tanggal', { ascending: true })
-        .range(from, from + pageSize - 1)
-
-      const { data, error } = await query
+      const { rows, error } = await kueriDenganUnit(
+        unitAktif,
+        () =>
+          supabase
+            .from('jurnal_pembelajaran')
+            .select(`${kolom}, unit`)
+            .gte('tanggal', start)
+            .lte('tanggal', end)
+            .or(filterKelas)
+            .eq('unit', unitAktif)
+            .order('tanggal', { ascending: true })
+            .range(from, from + pageSize - 1),
+        () =>
+          supabase
+            .from('jurnal_pembelajaran')
+            .select(kolom)
+            .gte('tanggal', start)
+            .lte('tanggal', end)
+            .or(filterKelas)
+            .order('tanggal', { ascending: true })
+            .range(from, from + pageSize - 1),
+      )
       if (error) return { rows: all, error }
-      const batch = (data ?? []) as Record<string, unknown>[]
-      all.push(...batch)
-      if (batch.length < pageSize) break
+      all.push(...rows)
+      if (rows.length < pageSize) break
       from += pageSize
     }
 
@@ -76,6 +95,7 @@ export async function getAbsensiJurnalSiswa(opts: {
   idSiswa: string
   namaSiswa: string
   kelas: string
+  unit?: string
   bulan?: string
 }): Promise<{ data: RekapAbsensiJurnal; error: string | null }> {
   if (!isStudentId(opts.idSiswa)) {
@@ -91,7 +111,7 @@ export async function getAbsensiJurnalSiswa(opts: {
 
   const bulan = opts.bulan || currentMonthKey()
   const { start, end } = monthRange(bulan)
-  const { rows, error } = await fetchJurnalKelasRentang(opts.kelas, start, end)
+  const { rows, error } = await fetchJurnalKelasRentang(opts.kelas, opts.unit || '', start, end)
 
   if (error) {
     console.error('absensi jurnal wali', error.message)

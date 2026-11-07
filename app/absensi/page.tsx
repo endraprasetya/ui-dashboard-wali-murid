@@ -23,6 +23,7 @@ export default async function AbsensiPage() {
     idSiswa: student.idSiswa,
     namaSiswa: student.name,
     kelas: student.kelas,
+    unit: student.unit,
     bulan,
   })
 
@@ -38,6 +39,7 @@ export default async function AbsensiPage() {
         idSiswa={student.idSiswa}
         namaSiswa={student.name}
         kelas={student.kelas}
+        unit={student.unit}
         initialRekap={rekap}
         initialError={error}
       />

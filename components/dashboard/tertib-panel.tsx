@@ -10,6 +10,7 @@ import {
   mapPeringkatKelas,
   TERTIB_POINT_SELECT,
 } from '@/lib/tertib-data'
+import { kolomUnitTidakAda, saringBarisMilikUnit, unitLogin, unitSama } from '@/lib/unit-isolasi'
 import type { BarisPeringkatKelas } from '@/lib/tertib-saldo'
 import { cn } from '@/lib/utils'
 import { DashboardCard } from './dashboard-card'
@@ -23,23 +24,39 @@ function bulanSekarang() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-async function muatTertib(idSiswa: string, bulan: string): Promise<TertibData> {
+async function muatTertib(idSiswa: string, unit: string, bulan: string): Promise<TertibData> {
+  const unitAktif = unitLogin(unit)
   const supabase = getSupabaseBrowser()
-  const { data, error } = await supabase
+  let query = supabase
     .from('tertib_point')
-    .select(TERTIB_POINT_SELECT)
+    .select(`${TERTIB_POINT_SELECT}, unit`)
     .eq('id_siswa', idSiswa)
     .eq('bulan', bulan)
     .order('created_at', { ascending: false })
     .limit(80)
+  if (unitAktif) query = query.eq('unit', unitAktif)
+
+  let { data, error } = await query
+  if (error && kolomUnitTidakAda(error)) {
+    const ulang = await supabase
+      .from('tertib_point')
+      .select(TERTIB_POINT_SELECT)
+      .eq('id_siswa', idSiswa)
+      .eq('bulan', bulan)
+      .order('created_at', { ascending: false })
+      .limit(80)
+    data = ulang.data
+    error = ulang.error
+  }
 
   if (error) throw error
-  return buildTertibData((data ?? []) as Record<string, unknown>[], idSiswa, bulan)
+  const rows = saringBarisMilikUnit((data ?? []) as Record<string, unknown>[], unitAktif, { idSiswa })
+  return buildTertibData(rows, idSiswa, bulan)
 }
 
 async function muatPeringkat(kelas: string, unit: string, bulan: string): Promise<BarisPeringkatKelas[]> {
-  if (!kelas.trim()) return []
-  const unitBersih = unit.trim()
+  const unitBersih = unitLogin(unit)
+  if (!kelas.trim() || !unitBersih) return []
   const supabase = getSupabaseBrowser()
   let querySiswa = supabase
     .from('siswa')
@@ -50,11 +67,23 @@ async function muatPeringkat(kelas: string, unit: string, bulan: string): Promis
 
   if (unitBersih) querySiswa = querySiswa.eq('unit', unitBersih)
 
-  const { data: siswaKelas, error: galatSiswa } = await querySiswa
+  let { data: siswaKelas, error: galatSiswa } = await querySiswa
+  let daftar = (siswaKelas ?? []).filter((row) => unitSama(row.unit, unitBersih))
 
-  if (galatSiswa || !siswaKelas?.length) return []
+  if (!galatSiswa && daftar.length === 0) {
+    const longgar = await supabase
+      .from('siswa')
+      .select('id_siswa, nama_siswa, kelas, unit')
+      .eq('kelas', kelas)
+      .not('kelas', 'ilike', '%Alumni%')
+      .order('nama_siswa', { ascending: true })
+    daftar = (longgar.data ?? []).filter((row) => unitSama(row.unit, unitBersih))
+    galatSiswa = longgar.error
+  }
 
-  const ids = siswaKelas.map((row) => String(row.id_siswa))
+  if (galatSiswa || !daftar.length) return []
+
+  const ids = daftar.map((row) => String(row.id_siswa))
   let queryLog = supabase
     .from('tertib_point')
     .select('id_siswa, bulan, pts, unit')
@@ -63,10 +92,19 @@ async function muatPeringkat(kelas: string, unit: string, bulan: string): Promis
 
   if (unitBersih) queryLog = queryLog.eq('unit', unitBersih)
 
-  const { data: logs, error: galatLog } = await queryLog
+  let { data: logs, error: galatLog } = await queryLog
+  if (galatLog && kolomUnitTidakAda(galatLog)) {
+    const ulang = await supabase
+      .from('tertib_point')
+      .select('id_siswa, bulan, pts')
+      .eq('bulan', bulan)
+      .in('id_siswa', ids)
+    logs = ulang.data
+    galatLog = ulang.error
+  }
 
   if (galatLog) return []
-  return mapPeringkatKelas(siswaKelas, (logs ?? []) as Record<string, unknown>[], bulan, unitBersih)
+  return mapPeringkatKelas(daftar, (logs ?? []) as Record<string, unknown>[], bulan, unitBersih)
 }
 
 export function TertibPanel({
@@ -105,7 +143,7 @@ export function TertibPanel({
 
   const refresh = useCallback(async () => {
     try {
-      const [next, papan] = await Promise.all([muatTertib(idSiswa, bulan), muatPeringkat(kelas, unit, bulan)])
+      const [next, papan] = await Promise.all([muatTertib(idSiswa, unit, bulan), muatPeringkat(kelas, unit, bulan)])
       setData(next)
       setPeringkat(papan)
       setError(null)
