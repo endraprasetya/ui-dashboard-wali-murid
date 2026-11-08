@@ -76,15 +76,12 @@ function KartuJadwal({ jadwal }: { jadwal: JadwalUjian }) {
   )
 }
 
-export function UjianBanner({ jadwal, hasil = [] }: { jadwal: JadwalUjian | null; hasil?: HasilUjianJilid[] }) {
-  if (!jadwal && hasil.length === 0) return null
-
+/** Hanya jadwal / antrean ujian. Hasil lengkap ada di beranda (5 hari) dan menu Qiroah. */
+export function UjianBanner({ jadwal }: { jadwal: JadwalUjian | null; hasil?: HasilUjianJilid[] }) {
+  if (!jadwal) return null
   return (
     <div className="space-y-3">
-      {hasil.slice(0, 3).map((item) => (
-        <KartuHasil key={item.id || `${item.jilidAsal}-${item.tanggal}`} hasil={item} />
-      ))}
-      {jadwal ? <KartuJadwal jadwal={jadwal} /> : null}
+      <KartuJadwal jadwal={jadwal} />
     </div>
   )
 }

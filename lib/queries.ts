@@ -19,6 +19,8 @@ import { kueriDenganUnit, muatSiswaUnit, rosterJurnalUnit } from '@/lib/isolasi-
 import { saringJurnalUnit } from '@/lib/jurnal-isolasi'
 import { normalKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
+import { muatRekapanUjianSiswa } from '@/lib/rekapan-qiroah-wali'
+import { catatanPenguji, type RekapanRingkas } from '@/lib/ujian-relasi'
 import { kolomUnitTidakAda, unitLogin, unitSama } from '@/lib/unit-isolasi'
 
 export type QueryResult<T> = {
@@ -168,6 +170,8 @@ export type DashboardData = {
   tertib: QueryResult<TertibData>
   jadwalUjian: JadwalUjian | null
   hasilUjian: HasilUjianJilid[]
+  rekapanUjian: RekapanRingkas[]
+  rekapanUjianError: string | null
 }
 
 const emptyTahfidz: TahfidzData = { latest: null, total: 0, lancar: 0, history: [] }
@@ -759,6 +763,8 @@ export function dashboardKosong(student: StudentProfile | null, studentError: st
     tertib: { data: emptyTertib, error: null },
     jadwalUjian: null,
     hasilUjian: [],
+    rekapanUjian: [],
+    rekapanUjianError: null,
   }
 }
 
@@ -775,6 +781,8 @@ export async function getDashboard(idSiswa: string): Promise<DashboardData> {
       tertib: { data: emptyTertib, error: null },
       jadwalUjian: null,
       hasilUjian: [],
+      rekapanUjian: [],
+      rekapanUjianError: null,
     }
   }
 
@@ -798,6 +806,8 @@ export async function getDashboard(idSiswa: string): Promise<DashboardData> {
     tertib,
     jadwalUjian: infoUjian.berlangsung,
     hasilUjian: infoUjian.hasil,
+    rekapanUjian: [],
+    rekapanUjianError: null,
   }
 }
 
@@ -846,31 +856,17 @@ export async function getInfoUjian(idSiswa: string, unit = ''): Promise<InfoUjia
           .eq('id_siswa', idSiswa),
       { idSiswa },
     ),
-    kueriDenganUnit(
-      unitAktif,
-      () =>
-        supabase
-          .from('rekapan')
-          .select(
-            'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan, unit',
-          )
-          .eq('id_siswa', idSiswa)
-          .eq('unit', unitAktif),
-      () =>
-        supabase
-          .from('rekapan')
-          .select(
-            'id_ujian, id_siswa, jilid_asal, jilid_tujuan, tanggal_ujian, penguji, predikat, keputusan, nilai_akhir, keterangan',
-          )
-          .eq('id_siswa', idSiswa),
-      { idSiswa },
-    ),
+    muatRekapanUjianSiswa(idSiswa, unitAktif, {
+      nama: siswa.nama,
+      kelas: siswa.kelas,
+      unit: unitAktif,
+      nis: siswa.nis,
+    }),
   ])
 
   if (pengajuan.error) logQueryError('jadwal ujian', pengajuan.error)
-  if (rekapan.error) logQueryError('rekapan ujian', rekapan.error)
 
-  const daftarRekap = rekapan.rows as Record<string, unknown>[]
+  const daftarRekap = rekapan.rows as RekapanRingkas[]
   const jilidSelesai = new Set(daftarRekap.map((row) => kunciJilid(row.jilid_asal)).filter(Boolean))
   const hasil = [...daftarRekap]
     .sort((a, b) => text(b.tanggal_ujian).localeCompare(text(a.tanggal_ujian)))
@@ -883,7 +879,7 @@ export async function getInfoUjian(idSiswa: string, unit = ''): Promise<InfoUjia
       predikat: text(row.predikat),
       keputusan: text(row.keputusan) || 'Selesai',
       nilai: text(row.nilai_akhir),
-      catatanPenguji: text(row.keterangan),
+      catatanPenguji: catatanPenguji(row),
     }))
 
   const hariIni = todayIso()

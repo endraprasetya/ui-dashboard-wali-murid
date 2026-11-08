@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { cacheBagian } from '@/lib/cache-portal'
 import { getDataDiriSiswa, type HasilDataDiri } from '@/lib/data-diri'
 import { getNotifikasiWali, type ButirNotifikasi } from '@/lib/notifikasi-wali'
+import { muatRekapanUjianSiswa } from '@/lib/rekapan-qiroah-wali'
 import {
   dashboardKosong,
   getAbsensi,
@@ -63,6 +64,23 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
   const student = studentResult.data
   const dashboard = dashboardKosong(student)
 
+  async function lampirkanRekapanUjian() {
+    const rekapan = await cacheBagian(
+      id,
+      'rekapan-ujian',
+      () =>
+        muatRekapanUjianSiswa(id, student.unit, {
+          nama: student.name,
+          kelas: student.kelas,
+          unit: student.unit,
+          nis: student.nis,
+        }),
+      (hasil) => hasil.error == null,
+    )
+    dashboard.rekapanUjian = rekapan.rows
+    dashboard.rekapanUjianError = rekapan.error
+  }
+
   if (bagian === 'beranda') {
     const [tahfidz, qiroah, jurnal, absensi, tertib, infoUjian, diri] = await Promise.all([
       cacheBagian(id, 'tahfidz', () => getTahfidz(id, student.unit), sukses),
@@ -73,6 +91,7 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
       cacheBagian(id, 'ujian-status', () => getInfoUjian(id, student.unit)),
       cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses),
     ])
+    await lampirkanRekapanUjian()
     return {
       dashboard: {
         ...dashboard,
@@ -92,7 +111,10 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
 
   let diri = diriKosong
   if (bagian === 'tahfidz') dashboard.tahfidz = await cacheBagian(id, 'tahfidz', () => getTahfidz(id, student.unit), sukses)
-  if (bagian === 'qiroah') dashboard.qiroah = await cacheBagian(id, 'qiroah', () => getQiroah(id, student.unit), sukses)
+  if (bagian === 'qiroah') {
+    dashboard.qiroah = await cacheBagian(id, 'qiroah', () => getQiroah(id, student.unit), sukses)
+    await lampirkanRekapanUjian()
+  }
   if (bagian === 'tahfidz' || bagian === 'qiroah') {
     const infoUjian = await cacheBagian(id, 'ujian-status', () => getInfoUjian(id, student.unit))
     dashboard.jadwalUjian = infoUjian.berlangsung
