@@ -57,9 +57,6 @@ export default async function KeuanganPage() {
           </span>
           <div>
             <h1 className="text-xl font-bold text-foreground">Keuangan</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Tagihan dan riwayat pembayaran ditarik dari AMPSS untuk siswa yang sedang masuk.
-            </p>
           </div>
         </div>
 

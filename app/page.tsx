@@ -1,6 +1,7 @@
 import { DataBelumLengkap } from '@/components/dashboard/data-belum-lengkap'
 import { BerandaRingkas } from '@/components/dashboard/beranda-ringkas'
 import { GreetingHero } from '@/components/dashboard/greeting-hero'
+import { PengingatAsasWali } from '@/components/dashboard/pengingat-asas-wali'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { UjianBanner } from '@/components/dashboard/ujian-banner'
 import { UjianQiroahRiwayat } from '@/components/dashboard/ujian-qiroah-riwayat'
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/" notifikasi={notifikasi}>
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} />
       <GreetingHero student={dashboard.student} />
+      <PengingatAsasWali />
       {hasilTerbaru.length > 0 ? <UjianQiroahRiwayat baris={hasilTerbaru} profil={profil} varian="beranda" /> : null}
       <UjianBanner jadwal={dashboard.jadwalUjian} />
       <BerandaRingkas data={dashboard} diri={diri} keuangan={keuangan} />

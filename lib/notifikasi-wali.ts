@@ -17,6 +17,13 @@ const PENGUMUMAN = [
     href: '/',
   },
   {
+    id: 'pengumuman:ujian-praktek',
+    judul: 'Ujian Praktek',
+    detail: '23 November 2026',
+    sampai: '2026-11-28',
+    href: '/pengumuman',
+  },
+  {
     id: 'pengumuman:asas-gasal',
     judul: 'Asesmen Sumatif Akhir Semester Gasal',
     detail: '30 November – 12 Desember 2026',

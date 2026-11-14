@@ -2,6 +2,7 @@ import 'server-only'
 
 import { muatSiswaUnit } from '@/lib/isolasi-kueri'
 import { isStudentId } from '@/lib/student-id'
+import { saringTagihanBelumTerbayarWali } from '@/lib/ampss-tagihan-aktif'
 import { parseAmpss, type HasilParseAmpss } from '@/lib/ampss-parse'
 
 const ASAL = 'https://www.ampss.net'
@@ -81,7 +82,14 @@ async function tarik(username: string): Promise<HasilKeuanganAmpss> {
     const html = await halamanSetelahMasuk(username)
     const hasil = parseAmpss(html)
     if (!hasil) return { ...kosong, error: 'Akun AMPSS siswa ini belum bisa dimasuki.' }
-    return { ...hasil, error: null }
+    const tagihan = saringTagihanBelumTerbayarWali(hasil.tagihan)
+    const belumTerbayar = tagihan.reduce((total, item) => total + item.jumlah, 0)
+    return {
+      ...hasil,
+      tagihan,
+      ringkas: { ...hasil.ringkas, belumTerbayar },
+      error: null,
+    }
   } catch {
     return { ...kosong, error: 'Tagihan AMPSS belum dapat dimuat. Coba lagi beberapa saat.' }
   }
