@@ -12,6 +12,13 @@ export type SiswaUnit = {
   kelas: string
   unit: string
   nis: string
+  yatim: boolean
+}
+
+function bacaYatim(nilai: unknown) {
+  if (nilai === true || nilai === 1) return true
+  const teks = String(nilai ?? '').trim().toLowerCase()
+  return teks === 'true' || teks === '1' || teks === 'ya' || teks === 'y' || teks === 'yatim'
 }
 
 function teks(nilai: unknown) {
@@ -21,13 +28,17 @@ function teks(nilai: unknown) {
 export async function muatSiswaUnit(idSiswa: string): Promise<SiswaUnit | null> {
   if (!isStudentId(idSiswa)) return null
   const supabase = getSupabase()
-  const { data, error } = await supabase
+  const denganPenanda = await supabase
     .from('siswa')
-    .select('id_siswa, nama_siswa, kelas, unit, nis')
+    .select('id_siswa, nama_siswa, kelas, unit, nis, is_yatim')
     .eq('id_siswa', idSiswa)
     .maybeSingle()
-
-  if (error || !data) return null
+  const kolomHilang = Boolean(denganPenanda.error && /is_yatim|column|schema cache/i.test(denganPenanda.error.message))
+  const hasil = kolomHilang
+    ? await supabase.from('siswa').select('id_siswa, nama_siswa, kelas, unit, nis').eq('id_siswa', idSiswa).maybeSingle()
+    : denganPenanda
+  const data = hasil.data
+  if (hasil.error || !data) return null
   const unit = unitLogin(teks(data.unit))
   return {
     idSiswa: teks(data.id_siswa),
@@ -35,6 +46,7 @@ export async function muatSiswaUnit(idSiswa: string): Promise<SiswaUnit | null> 
     kelas: teks(data.kelas),
     unit,
     nis: teks(data.nis),
+    yatim: bacaYatim((data as { is_yatim?: unknown }).is_yatim),
   }
 }
 

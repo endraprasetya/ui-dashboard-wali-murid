@@ -9,7 +9,11 @@ const ASAL = 'https://www.ampss.net'
 const UMUR_BERHASIL = 60_000
 const UMUR_GAGAL = 20_000
 
-export type HasilKeuanganAmpss = HasilParseAmpss & { error: string | null }
+export type HasilKeuanganAmpss = HasilParseAmpss & {
+  error: string | null
+  yatim?: boolean
+  ditanggung?: number
+}
 
 const kosong: HasilParseAmpss = { tagihan: [], riwayat: [], ringkas: { terbayar: 0, belumTerbayar: 0 } }
 const cache = new Map<string, { waktu: number; hasil: HasilKeuanganAmpss }>()
@@ -110,6 +114,15 @@ export async function ambilKeuanganAmpss(idSiswa: string, nis = ''): Promise<Has
   )
   let hasil = await tarik(urutan[0] || idSiswa)
   if (hasil.error && urutan[1]) hasil = await tarik(urutan[1])
+  if (siswa.yatim && !hasil.error) {
+    hasil = {
+      ...hasil,
+      tagihan: [],
+      ringkas: { ...hasil.ringkas, belumTerbayar: 0 },
+      yatim: true,
+      ditanggung: hasil.ringkas.belumTerbayar,
+    }
+  }
   cache.set(idSiswa, { waktu: Date.now(), hasil })
   return hasil
 }

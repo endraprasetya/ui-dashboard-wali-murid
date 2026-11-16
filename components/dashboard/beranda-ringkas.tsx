@@ -21,6 +21,7 @@ type RingkasKeuangan = {
   error: string | null
   ringkas: { terbayar: number; belumTerbayar: number }
   tagihan: { keterangan: string; jumlah: number }[]
+  yatim?: boolean
 }
 
 function rupiah(nilai: number) {
@@ -234,7 +235,8 @@ export function BerandaRingkas({
           </p>
           {keuangan && !keuangan.error ? (
             <ul className="mt-2 border-t border-slate-200 pt-1">
-              <Baris kiri="Belum terbayar" kanan={rupiah(keuangan.ringkas.belumTerbayar)} />
+              {keuangan.yatim ? <Baris kiri="Status" kanan="Yatim - Gratis" /> : null}
+              <Baris kiri={keuangan.yatim ? 'Tagihan aktif' : 'Belum terbayar'} kanan={rupiah(keuangan.ringkas.belumTerbayar)} />
               <Baris kiri="Sudah terbayar" kanan={rupiah(keuangan.ringkas.terbayar)} />
             </ul>
           ) : null}

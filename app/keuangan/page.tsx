@@ -57,6 +57,9 @@ export default async function KeuanganPage() {
           </span>
           <div>
             <h1 className="text-xl font-bold text-foreground">Keuangan</h1>
+            {keuangan.yatim ? (
+              <p className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">Yatim - Gratis</p>
+            ) : null}
           </div>
         </div>
 
@@ -66,8 +69,9 @@ export default async function KeuanganPage() {
           <>
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border p-4">
-                <dt className="text-xs text-muted-foreground">Belum terbayar</dt>
+                <dt className="text-xs text-muted-foreground">{keuangan.yatim ? 'Tagihan aktif' : 'Belum terbayar'}</dt>
                 <dd className="mt-1 text-2xl font-bold text-foreground">{rupiah(keuangan.ringkas.belumTerbayar)}</dd>
+                {keuangan.yatim ? <p className="mt-1 text-xs font-semibold text-emerald-800">Ditanggung Yayasan (Gratis)</p> : null}
               </div>
               <div className="rounded-2xl border p-4">
                 <dt className="text-xs text-muted-foreground">Sudah terbayar</dt>
@@ -84,7 +88,9 @@ export default async function KeuanganPage() {
             <div className="mt-6 overflow-x-auto">
               <h2 className="text-sm font-bold text-foreground">Tagihan belum terbayar</h2>
               {keuangan.tagihan.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">Tidak ada tagihan terbuka.</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {keuangan.yatim ? 'Tagihan aktif bernilai Rp 0 dan ditanggung yayasan.' : 'Tidak ada tagihan terbuka.'}
+                </p>
               ) : (
                 <table className="mt-2 w-full min-w-[520px] text-left text-sm">
                   <thead>
