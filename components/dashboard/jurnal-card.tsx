@@ -29,12 +29,17 @@ function jamPelajaran(jam: string) {
   return `Jam ke-${nomor} · ${waktu}`
 }
 
+function nomorJam(jam: string) {
+  return Number.parseInt(jam || '0', 10) || 0
+}
+
 function sortEntriesByJam(entries: JurnalEntry[]): JurnalEntry[] {
-  return [...entries].sort((a, b) => {
-    const jamA = parseInt(a.jam || '0', 10)
-    const jamB = parseInt(b.jam || '0', 10)
-    return jamA - jamB
-  })
+  return [...entries].sort((a, b) => nomorJam(a.jam) - nomorJam(b.jam))
+}
+
+function tanggalTerbaru(entries: JurnalEntry[], hariIni: string) {
+  const iso = entries.map((item) => item.iso).filter(Boolean).sort()
+  return iso.filter((item) => item <= hariIni).at(-1) || iso.at(-1) || ''
 }
 
 export function JurnalCard({
@@ -48,13 +53,16 @@ export function JurnalCard({
   entries: JurnalEntry[]
   error: string | null
 }) {
-  const [selectedDate, setSelectedDate] = useState<string>('')
   const hariIni = todayIso()
+  const awal = useMemo(() => tanggalTerbaru(entries, hariIni), [entries, hariIni])
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const tanggalAktif = selectedDate === null ? awal : selectedDate
 
   const filteredEntries = useMemo(() => {
-    const filtered = selectedDate ? entries.filter((item) => item.iso === selectedDate) : entries
-    return selectedDate ? sortEntriesByJam(filtered) : filtered
-  }, [entries, selectedDate])
+    const filtered = tanggalAktif ? entries.filter((item) => item.iso === tanggalAktif) : entries
+    if (tanggalAktif) return sortEntriesByJam(filtered)
+    return [...filtered].sort((a, b) => b.iso.localeCompare(a.iso) || nomorJam(a.jam) - nomorJam(b.jam))
+  }, [entries, tanggalAktif])
 
   return (
     <DashboardCard
@@ -74,17 +82,20 @@ export function JurnalCard({
             <Calendar className="size-4 text-muted-foreground" />
             <input
               type="date"
-              value={selectedDate}
+              value={tanggalAktif}
               onChange={(e) => setSelectedDate(e.target.value)}
               className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm"
             />
-            {selectedDate && (
+            <span className="text-xs font-semibold text-slate-600">
+              {filteredEntries.length} jam pelajaran
+            </span>
+            {tanggalAktif && (
               <button
                 type="button"
                 onClick={() => setSelectedDate('')}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
-                Reset
+                Semua tanggal
               </button>
             )}
           </div>

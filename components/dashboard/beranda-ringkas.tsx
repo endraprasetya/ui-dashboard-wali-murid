@@ -13,7 +13,7 @@ import { KotakRingkas } from '@/components/dashboard/kotak-ringkas'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
 import type { HasilDataDiri } from '@/lib/data-diri'
 import type { DashboardData, JurnalEntry, TertibEntry } from '@/lib/queries'
-import { labelMapelGuru } from '@/lib/format'
+import { labelMapelGuru, todayIso } from '@/lib/format'
 import { agendaMendatang } from '@/lib/pengumuman'
 import { adaIsiTugas, dahulukanBelumDikerjakan, sudahDikonfirmasi } from '@/lib/tugas-status'
 
@@ -81,7 +81,14 @@ export function BerandaRingkas({
       status: row.konfirmasi,
     })),
   )
-  const jurnal = data.jurnal.data.slice(0, 3)
+  const tanggalJurnal = data.jurnal.data
+    .map((row) => row.iso)
+    .filter((iso) => iso && iso <= todayIso())
+    .sort()
+    .at(-1) || data.jurnal.data.map((row) => row.iso).filter(Boolean).sort().at(-1) || ''
+  const jurnal = data.jurnal.data
+    .filter((row) => !tanggalJurnal || row.iso === tanggalJurnal)
+    .sort((a, b) => (Number.parseInt(a.jam, 10) || 0) - (Number.parseInt(b.jam, 10) || 0))
   const tertib = data.tertib.data.items.slice(0, 3)
   const absensi = data.absensi.data
   const pengumuman = agendaMendatang(2)
@@ -162,12 +169,14 @@ export function BerandaRingkas({
           <Kosong teks="Belum ada jurnal untuk kelas ini." />
         ) : (
           <div>
-            <JudulBagian>3 kegiatan terakhir</JudulBagian>
+            <JudulBagian>
+              {jurnal[0]?.date ? `Semua jam ${jurnal[0].date}` : 'Jurnal kelas'}
+            </JudulBagian>
             <ul>
               {jurnal.map((row: JurnalEntry) => (
                 <Baris
                   key={row.id}
-                  kiri={`${labelMapelGuru(row.mapel, row.guru)}${row.materi ? ` · ${row.materi}` : ''}`}
+                  kiri={`Jam ${row.jam} · ${labelMapelGuru(row.mapel, row.guru)}${row.materi ? ` · ${row.materi}` : ''}`}
                   kanan={row.date}
                 />
               ))}

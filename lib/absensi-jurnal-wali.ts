@@ -2,12 +2,12 @@ import 'server-only'
 
 import { buildAbsensiSiswaFromJurnal, monthRange, type RekapAbsensiJurnal } from '@/lib/absensi-siswa-logic'
 import { currentMonthKey } from '@/lib/format'
-import { kueriDenganUnit, rosterJurnalUnit } from '@/lib/isolasi-kueri'
+import { rosterJurnalUnit } from '@/lib/isolasi-kueri'
 import { saringJurnalUnit } from '@/lib/jurnal-isolasi'
-import { normalKelasJurnal } from '@/lib/kelas-jurnal'
+import { filterOrKelasJurnal, normalKelasJurnal, variasiKelasJurnal } from '@/lib/kelas-jurnal'
 import { isStudentId } from '@/lib/student-id'
 import { getSupabase } from '@/lib/supabase'
-import { unitLogin } from '@/lib/unit-isolasi'
+import { kolomUnitTidakAda, unitLogin } from '@/lib/unit-isolasi'
 
 function kolomGuruTidakAda(error?: { code?: string; message?: string } | null) {
   const pesan = String(error?.message || '').toLowerCase()
@@ -24,13 +24,7 @@ async function fetchJurnalKelasRentang(kelas: string, unit: string, start: strin
   if (!className || !unitAktif) return { rows: [] as Record<string, unknown>[], error: null as { message?: string } | null }
 
   const kunci = normalKelasJurnal(className)
-  const variasi = Array.from(
-    new Set(
-      [className, className.replace(/\s+/g, ''), className.replace(/\s+/g, ' ').trim(), `Kelas ${className}`].filter(
-        Boolean,
-      ),
-    ),
-  )
+  const filterKelas = filterOrKelasJurnal(variasiKelasJurnal(className, unitAktif))
   const kolomDenganGuru =
     'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, siswa_tidak_hadir, guru'
   const kolomTanpaGuru =
@@ -48,35 +42,27 @@ async function fetchJurnalKelasRentang(kelas: string, unit: string, start: strin
     const pageSize = 1000
     const all: Record<string, unknown>[] = []
     let from = 0
-
-    const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
+    let sertakanUnit = true
 
     while (true) {
-      const { rows, error } = await kueriDenganUnit(
-        unitAktif,
-        () =>
-          supabase
-            .from('jurnal_pembelajaran')
-            .select(`${kolom}, unit`)
-            .gte('tanggal', start)
-            .lte('tanggal', end)
-            .or(filterKelas)
-            .eq('unit', unitAktif)
-            .order('tanggal', { ascending: true })
-            .range(from, from + pageSize - 1),
-        () =>
-          supabase
-            .from('jurnal_pembelajaran')
-            .select(kolom)
-            .gte('tanggal', start)
-            .lte('tanggal', end)
-            .or(filterKelas)
-            .order('tanggal', { ascending: true })
-            .range(from, from + pageSize - 1),
-      )
+      const { data, error } = await supabase
+        .from('jurnal_pembelajaran')
+        .select(sertakanUnit ? `${kolom}, unit` : kolom)
+        .gte('tanggal', start)
+        .lte('tanggal', end)
+        .or(filterKelas)
+        .order('tanggal', { ascending: true })
+        .order('jam', { ascending: true })
+        .range(from, from + pageSize - 1)
+
+      if (error && sertakanUnit && kolomUnitTidakAda(error)) {
+        sertakanUnit = false
+        continue
+      }
       if (error) return { rows: all, error }
-      all.push(...rows)
-      if (rows.length < pageSize) break
+      const baris = (data ?? []) as Record<string, unknown>[]
+      all.push(...baris)
+      if (baris.length < pageSize) break
       from += pageSize
     }
 

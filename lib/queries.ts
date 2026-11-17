@@ -17,7 +17,7 @@ import type { BarisPeringkatKelas } from '@/lib/tertib-saldo'
 import { getAbsensiJurnalSiswa } from '@/lib/absensi-jurnal-wali'
 import { kueriDenganUnit, muatSiswaUnit, rosterJurnalUnit } from '@/lib/isolasi-kueri'
 import { saringJurnalUnit } from '@/lib/jurnal-isolasi'
-import { normalKelasJurnal } from '@/lib/kelas-jurnal'
+import { filterOrKelasJurnal, normalKelasJurnal, variasiKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabase } from '@/lib/supabase'
 import { muatRekapanUjianSiswa } from '@/lib/rekapan-qiroah-wali'
 import { catatanPenguji, type RekapanRingkas } from '@/lib/ujian-relasi'
@@ -544,14 +544,7 @@ export async function getJurnal(kelas: string, unit = ''): Promise<QueryResult<J
   if (!className || !unitAktif) return { data: [], error: null }
 
   const kunci = normalKelasJurnal(className)
-  const variasi = Array.from(
-    new Set(
-      [className, className.replace(/\s+/g, ''), className.replace(/\s+/g, ' ').trim(), `Kelas ${className}`].filter(
-        Boolean,
-      ),
-    ),
-  )
-  const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
+  const filterKelas = filterOrKelasJurnal(variasiKelasJurnal(className, unitAktif))
   const kolomDenganGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas, guru'
   const kolomTanpaGuru = 'id, tanggal, kelas, mapel, materi, kegiatan, jam, semester, hadir, tidak_hadir, links, tugas'
   const supabase = getSupabase()
@@ -563,31 +556,38 @@ export async function getJurnal(kelas: string, unit = ''): Promise<QueryResult<J
     )
 
   async function ambil(kolom: string) {
-    const { rows, error } = await kueriDenganUnit(
-      unitAktif,
-      () =>
-        supabase
-          .from('jurnal_pembelajaran')
-          .select(`${kolom}, unit`)
-          .or(filterKelas)
-          .eq('unit', unitAktif)
-          .order('tanggal', { ascending: false })
-          .limit(400),
-      () =>
-        supabase
-          .from('jurnal_pembelajaran')
-          .select(kolom)
-          .or(filterKelas)
-          .order('tanggal', { ascending: false })
-          .limit(400),
-    )
+    const pageSize = 1000
+    const semua: Record<string, unknown>[] = []
+    let from = 0
+    let sertakanUnit = true
 
-    if (error && !kolomGuruTidakAda(error)) logQueryError('jurnal', error)
-    if (error && !kolomGuruTidakAda(error)) {
-      return { rows: [] as Record<string, unknown>[], error }
+    while (true) {
+      const { data, error } = await supabase
+        .from('jurnal_pembelajaran')
+        .select(sertakanUnit ? `${kolom}, unit` : kolom)
+        .or(filterKelas)
+        .order('tanggal', { ascending: false })
+        .order('jam', { ascending: true })
+        .range(from, from + pageSize - 1)
+
+      if (error && sertakanUnit && kolomUnitTidakAda(error)) {
+        sertakanUnit = false
+        continue
+      }
+      if (error && kolomGuruTidakAda(error)) {
+        return { rows: cocokKelas(semua), error }
+      }
+      if (error) {
+        logQueryError('jurnal', error)
+        return { rows: [] as Record<string, unknown>[], error }
+      }
+      const baris = (data ?? []) as Record<string, unknown>[]
+      semua.push(...baris)
+      if (baris.length < pageSize) break
+      from += pageSize
     }
 
-    return { rows: cocokKelas(rows), error: kolomGuruTidakAda(error) ? error : null }
+    return { rows: cocokKelas(semua), error: null }
   }
 
   let hasil = await ambil(kolomDenganGuru)
@@ -598,8 +598,19 @@ export async function getJurnal(kelas: string, unit = ''): Promise<QueryResult<J
     return { data: [], error: 'Jurnal pembelajaran belum bisa dimuat.' }
   }
 
-  const entries = sortedRows(cocokKelas(hasil.rows).filter(jurnalBerisi)).map(toJurnal)
+  const mentah = sortedRows(cocokKelas(hasil.rows).filter(jurnalBerisi)).map(toJurnal)
+  const unik = new Map<string, JurnalEntry>()
+  for (const item of mentah) {
+    const kunciSlot = `${item.iso}|${Number.parseInt(item.jam, 10) || item.jam}`
+    const ada = unik.get(kunciSlot)
+    if (!ada || skorJurnal(item) >= skorJurnal(ada)) unik.set(kunciSlot, item)
+  }
+  const entries = [...unik.values()].sort((a, b) => b.iso.localeCompare(a.iso) || (Number.parseInt(a.jam, 10) || 0) - (Number.parseInt(b.jam, 10) || 0))
   return { data: entries, error: null }
+}
+
+function skorJurnal(item: JurnalEntry) {
+  return [item.materi, item.kegiatan, item.tugas, item.mapel && item.mapel !== 'Pembelajaran' ? item.mapel : ''].filter(Boolean).length
 }
 
 export async function getAbsensi(idSiswa: string): Promise<QueryResult<AttendanceData>> {

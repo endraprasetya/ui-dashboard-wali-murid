@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildAbsensiSiswaFromJurnal, monthRange, type RekapAbsensiJurnal } from '@/lib/absensi-siswa-logic'
 import { currentMonthKey, todayIso } from '@/lib/format'
 import { saringJurnalUnit, type RosterIsolasiJurnal } from '@/lib/jurnal-isolasi'
-import { normalKelasJurnal } from '@/lib/kelas-jurnal'
+import { filterOrKelasJurnal, normalKelasJurnal, variasiKelasJurnal } from '@/lib/kelas-jurnal'
 import { getSupabaseBrowser } from '@/lib/supabase-browser'
 import { kolomUnitTidakAda, unitLogin, unitSama } from '@/lib/unit-isolasi'
 import { cn } from '@/lib/utils'
@@ -47,39 +47,47 @@ async function muatJurnalBulan(kelas: string, unit: string, bulan: string) {
   if (!kelas.trim() || !unitAktif) return []
   const { start, end } = monthRange(bulan)
   const supabase = getSupabaseBrowser()
-  const variasi = Array.from(
-    new Set([kelas, kelas.replace(/\s+/g, ''), kelas.replace(/\s+/g, ' ').trim(), `Kelas ${kelas}`].filter(Boolean)),
-  )
-  const filterKelas = variasi.map((nama) => `kelas.eq.${nama}`).join(',')
+  const filterKelas = filterOrKelasJurnal(variasiKelasJurnal(kelas, unitAktif))
   const kolom = 'id, tanggal, kelas, mapel, jam, siswa_tidak_hadir, guru, nama_guru, nama_ustadz, hadir, tidak_hadir'
   const roster = await muatRosterKelas(kelas, unitAktif)
+  const pageSize = 1000
+  const semua: Record<string, unknown>[] = []
+  let from = 0
 
-  let query = supabase
-    .from('jurnal_pembelajaran')
-    .select(`${kolom}, unit`)
-    .gte('tanggal', start)
-    .lte('tanggal', end)
-    .or(filterKelas)
-    .eq('unit', unitAktif)
-    .order('tanggal', { ascending: true })
-    .limit(800)
-
-  let { data, error } = await query
-  if (error && kolomUnitTidakAda(error)) {
-    const ulang = await supabase
+  while (true) {
+    let query = supabase
       .from('jurnal_pembelajaran')
-      .select(kolom)
+      .select(`${kolom}, unit`)
       .gte('tanggal', start)
       .lte('tanggal', end)
       .or(filterKelas)
       .order('tanggal', { ascending: true })
-      .limit(800)
-    data = ulang.data
-    error = ulang.error
+      .order('jam', { ascending: true })
+      .range(from, from + pageSize - 1)
+
+    let { data, error } = await query
+    if (error && kolomUnitTidakAda(error)) {
+      const ulang = await supabase
+        .from('jurnal_pembelajaran')
+        .select(kolom)
+        .gte('tanggal', start)
+        .lte('tanggal', end)
+        .or(filterKelas)
+        .order('tanggal', { ascending: true })
+        .order('jam', { ascending: true })
+        .range(from, from + pageSize - 1)
+      data = ulang.data
+      error = ulang.error
+    }
+
+    if (error) throw error
+    const baris = (data ?? []) as Record<string, unknown>[]
+    semua.push(...baris)
+    if (baris.length < pageSize) break
+    from += pageSize
   }
 
-  if (error) throw error
-  return saringJurnalUnit((data ?? []) as Record<string, unknown>[], roster)
+  return saringJurnalUnit(semua, roster)
 }
 
 function tanggalDefaultFilter(rekap: RekapAbsensiJurnal, bulan: string) {

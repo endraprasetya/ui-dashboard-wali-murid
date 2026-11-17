@@ -1,6 +1,6 @@
 import { normalizeSiswaTidakHadir } from '@/lib/absensi-siswa-logic'
-import { normalKelasJurnal } from '@/lib/kelas-jurnal'
-import { unitLogin, unitSama } from '@/lib/unit-isolasi'
+import { normalKelasJurnal, unitDariKelasJurnal, unitJurnalSama } from '@/lib/kelas-jurnal'
+import { unitLogin } from '@/lib/unit-isolasi'
 
 function normNama(nilai: unknown) {
   return String(nilai ?? '')
@@ -30,9 +30,12 @@ export function saringJurnalUnit(rows: Record<string, unknown>[], roster: Roster
   return rows.filter((row) => {
     if (normalKelasJurnal(String(row.kelas || '')) !== kunciKelas) return false
 
+    const dariPrefiks = unitDariKelasJurnal(String(row.kelas || ''))
+    if (dariPrefiks) return Boolean(unitAktif) && unitJurnalSama(dariPrefiks, unitAktif)
+
     const unitBaris = String(row.unit ?? '').trim()
     if (unitBaris) {
-      return Boolean(unitAktif) && unitSama(unitBaris, unitAktif)
+      return Boolean(unitAktif) && unitJurnalSama(unitBaris, unitAktif)
     }
 
     const absen = normalizeSiswaTidakHadir(row.siswa_tidak_hadir)
