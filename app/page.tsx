@@ -1,11 +1,13 @@
 import { DataBelumLengkap } from '@/components/dashboard/data-belum-lengkap'
 import { BerandaRingkas } from '@/components/dashboard/beranda-ringkas'
 import { GreetingHero } from '@/components/dashboard/greeting-hero'
+import { BannerKeringananWali } from '@/components/dashboard/banner-keringanan-wali'
 import { PengingatAsasWali } from '@/components/dashboard/pengingat-asas-wali'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { UjianBanner } from '@/components/dashboard/ujian-banner'
 import { UjianQiroahRiwayat } from '@/components/dashboard/ujian-qiroah-riwayat'
 import { ambilKeuanganAmpss } from '@/lib/ampss'
+import { muatPengajuanUntukNis, pengajuanTerbaru } from '@/lib/pengajuan-keringanan'
 import { muatPortal } from '@/lib/muat-portal'
 import { dalamLimaHariSejakUjian } from '@/lib/ujian-rentang'
 
@@ -16,6 +18,14 @@ export default async function DashboardPage() {
   if (gagal || !dashboard.student) return <PortalGagal pesan={gagal || 'Data siswa belum bisa dimuat.'} />
 
   const keuangan = await ambilKeuanganAmpss(dashboard.student.idSiswa, dashboard.student.nis)
+  const sisaTunggakan = keuangan.yatim ? 0 : keuangan.ringkas.belumTerbayar
+  const keringanan =
+    pengajuanTerbaru(
+      await muatPengajuanUntukNis([dashboard.student.nis, dashboard.student.idSiswa]),
+      dashboard.student.nis,
+      dashboard.student.idSiswa,
+    ) ?? null
+  const pengingatKeringananSelesai = Boolean(keringanan?.suratResmiDikirimPada) && sisaTunggakan <= 0
   const hasilTerbaru = dashboard.rekapanUjian.filter((row) => dalamLimaHariSejakUjian(row.tanggal_ujian)).slice(0, 3)
   const profil = {
     nama: dashboard.student.name,
@@ -29,6 +39,9 @@ export default async function DashboardPage() {
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} />
       <GreetingHero student={dashboard.student} />
       <PengingatAsasWali />
+      {keringanan && !pengingatKeringananSelesai ? (
+        <BannerKeringananWali pengajuan={keringanan} sisaTunggakan={sisaTunggakan} />
+      ) : null}
       {hasilTerbaru.length > 0 ? <UjianQiroahRiwayat baris={hasilTerbaru} profil={profil} varian="beranda" /> : null}
       <UjianBanner jadwal={dashboard.jadwalUjian} />
       <BerandaRingkas data={dashboard} diri={diri} keuangan={keuangan} />

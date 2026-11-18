@@ -249,6 +249,14 @@ export function BerandaRingkas({
               <Baris kiri="Sudah terbayar" kanan={rupiah(keuangan.ringkas.terbayar)} />
             </ul>
           ) : null}
+          {keuangan && !keuangan.error && !keuangan.yatim && keuangan.ringkas.belumTerbayar > 0 ? (
+            <Link
+              href="/keuangan#keringanan"
+              className="tombol-buka mt-2 inline-flex items-center rounded-xl px-3.5 py-2 text-xs font-bold"
+            >
+              Ajukan keringanan / penundaan pembayaran
+            </Link>
+          ) : null}
         </div>
       </KotakRingkas>
 

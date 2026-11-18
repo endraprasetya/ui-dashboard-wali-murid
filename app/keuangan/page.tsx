@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
 import { Wallet } from 'lucide-react'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
+import { TombolAjukanKeringanan } from '@/components/dashboard/pengajuan-keringanan'
+import { NoticeStatusKeringanan } from '@/components/dashboard/notice-status-keringanan'
 import { ambilKeuanganAmpss } from '@/lib/ampss'
 import type { TagihanAmpss } from '@/lib/ampss-parse'
+import { muatPengajuanUntukNis, pengajuanTerbaru } from '@/lib/pengajuan-keringanan'
 import { muatPortal } from '@/lib/muat-portal'
 
 export const dynamic = 'force-dynamic'
@@ -47,6 +50,9 @@ export default async function KeuanganPage() {
   if (gagal || !dashboard.student) return <PortalGagal pesan={gagal || 'Data siswa belum bisa dimuat.'} />
 
   const keuangan = await ambilKeuanganAmpss(dashboard.student.idSiswa, dashboard.student.nis)
+  const daftarKeringanan = await muatPengajuanUntukNis([dashboard.student.nis, dashboard.student.idSiswa])
+  const pengajuanKeringanan =
+    pengajuanTerbaru(daftarKeringanan, dashboard.student.nis, dashboard.student.idSiswa) ?? null
 
   return (
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/keuangan" notifikasi={notifikasi}>
@@ -64,7 +70,10 @@ export default async function KeuanganPage() {
         </div>
 
         {keuangan.error ? (
-          <p className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">{keuangan.error}</p>
+          <>
+            <p className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">{keuangan.error}</p>
+            {pengajuanKeringanan ? <NoticeStatusKeringanan pengajuan={pengajuanKeringanan} /> : null}
+          </>
         ) : (
           <>
             <dl className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -78,6 +87,12 @@ export default async function KeuanganPage() {
                 <dd className="mt-1 text-2xl font-bold text-foreground">{rupiah(keuangan.ringkas.terbayar)}</dd>
               </div>
             </dl>
+
+            <TombolAjukanKeringanan
+              tunggakan={keuangan.ringkas.belumTerbayar}
+              yatim={keuangan.yatim}
+              pengajuan={pengajuanKeringanan}
+            />
 
             <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {KELOMPOK.map((judul) => (
