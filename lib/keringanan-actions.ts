@@ -30,10 +30,12 @@ export async function muatKeringananSiswaLogin(): Promise<{ pengajuan: Pengajuan
 }
 
 export async function kirimPengajuanKeringanan(input: {
-  nominalKesanggupan: number
+  jenisKegiatan: string
+  mekanismePelunasan: string
+  nominalAngsuran?: number
   tanggalRencanaLunas: string
   nominalTunggakan: number
-  alasanPengajuan?: string
+  alasanPengajuan: string
 }): Promise<{ error: string | null }> {
   const session = await getSession()
   if (!session || !isStudentId(session.idSiswa)) return { error: 'Sesi berakhir. Silakan masuk lagi.' }
@@ -48,7 +50,9 @@ export async function kirimPengajuanKeringanan(input: {
       kelas: siswa.kelas,
       unit: siswa.unit,
       nominalTunggakan: input.nominalTunggakan,
-      nominalKesanggupan: input.nominalKesanggupan,
+      jenisKegiatan: input.jenisKegiatan,
+      mekanismePelunasan: input.mekanismePelunasan,
+      nominalAngsuran: input.nominalAngsuran,
       tanggalRencanaLunas: input.tanggalRencanaLunas,
       alasanPengajuan: input.alasanPengajuan,
     })

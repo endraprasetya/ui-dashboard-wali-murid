@@ -1,7 +1,11 @@
 import 'server-only'
 
+import { unstable_noStore as noStore } from 'next/cache'
 import {
+  JENIS_KEGIATAN_PENGAJUAN,
+  MEKANISME_PELUNASAN,
   STATUS_PENGAJUAN_KERINGANAN,
+  rupiahKeringanan,
   type PengajuanKeringanan,
   type StatusPengajuanKeringanan,
 } from '@/lib/pengajuan-keringanan-tampilan'
@@ -58,6 +62,9 @@ function petakan(row: Record<string, unknown>): PengajuanKeringanan | null {
     nominalTunggakan: Number(row.nominal_tunggakan) || 0,
     kesanggupanBayar: String(row.kesanggupan_bayar || ''),
     alasanPengajuan: String(row.alasan_pengajuan || ''),
+    jenisKegiatan: String(row.jenis_kegiatan || ''),
+    mekanismePelunasan: String(row.mekanisme_pelunasan || ''),
+    nominalAngsuran: Number(row.nominal_angsuran) || 0,
     nomorSurat: String(row.nomor_surat || ''),
     tanggalRencanaLunas: String(row.tanggal_rencana_lunas || ''),
     statusPersetujuan: status,
@@ -93,6 +100,7 @@ export function pengajuanTerbaru(daftar: PengajuanKeringanan[], ...kunci: string
 }
 
 export async function muatPengajuanUntukNis(nis: string[]): Promise<PengajuanKeringanan[]> {
+  noStore()
   const unik = [...new Set(nis.flatMap((nilai) => [String(nilai || '').trim(), angkaNis(nilai)]).filter(Boolean))]
   if (unik.length === 0) return []
 
@@ -125,9 +133,11 @@ export async function ajukanKeringanan(input: {
   kelas: string
   unit: string
   nominalTunggakan: number
-  nominalKesanggupan: number
+  jenisKegiatan: string
+  mekanismePelunasan: string
+  nominalAngsuran?: number
   tanggalRencanaLunas: string
-  alasanPengajuan?: string
+  alasanPengajuan: string
 }) {
   const nis = nisUntukKeringanan(input.nis)
   const namaSiswa = String(input.namaSiswa || '').trim()
@@ -135,16 +145,27 @@ export async function ajukanKeringanan(input: {
   const kelas = String(input.kelas || '').trim()
   const tanggalRencanaLunas = isoDariTanggalJakarta(input.tanggalRencanaLunas)
   const rencana = new Date(tanggalRencanaLunas)
-  const nominalKesanggupan = Math.round(Number(input.nominalKesanggupan))
   const nominalTunggakan = Math.round(Number(input.nominalTunggakan))
+  const jenisKegiatan = String(input.jenisKegiatan || '').trim()
+  const mekanismePelunasan = String(input.mekanismePelunasan || '').trim()
+  const alasan = String(input.alasanPengajuan || '').trim()
+  const nominalAngsuran = Math.round(Number(input.nominalAngsuran) || 0)
+  const mengangsur = mekanismePelunasan === 'Mengangsur tiap bulan'
 
   if (!nis || nis.length < 3) throw new Error('NIS siswa belum terbaca. Lengkapi data siswa terlebih dahulu.')
   if (!namaSiswa) throw new Error('Nama siswa belum terbaca.')
   if (!unit) throw new Error('Unit ananda belum terbaca.')
   if (!(nominalTunggakan > 0)) throw new Error('Pengajuan hanya untuk ananda yang masih memiliki tunggakan.')
-  if (!(nominalKesanggupan > 0)) throw new Error('Nominal kesanggupan bayar wajib diisi.')
-  if (nominalKesanggupan > nominalTunggakan) {
-    throw new Error('Nominal kesanggupan tidak boleh melebihi total tunggakan.')
+  if (!(JENIS_KEGIATAN_PENGAJUAN as readonly string[]).includes(jenisKegiatan)) {
+    throw new Error('Jenis kegiatan / keperluan wajib dipilih.')
+  }
+  if (!alasan) throw new Error('Alasan pengajuan rekomendasi wajib diisi.')
+  if (!(MEKANISME_PELUNASAN as readonly string[]).includes(mekanismePelunasan)) {
+    throw new Error('Mekanisme pelunasan wajib dipilih.')
+  }
+  if (mengangsur && !(nominalAngsuran > 0)) throw new Error('Nominal angsuran wajib diisi.')
+  if (mengangsur && nominalAngsuran > nominalTunggakan) {
+    throw new Error('Nominal angsuran tidak boleh melebihi total tunggakan.')
   }
   if (!tanggalRencanaLunas || Number.isNaN(rencana.getTime())) {
     throw new Error('Tanggal rencana pelunasan tidak valid.')
@@ -159,9 +180,9 @@ export async function ajukanKeringanan(input: {
     throw new Error('Pengajuan ananda ini sudah disetujui.')
   }
 
-  const alasan =
-    String(input.alasanPengajuan || '').trim() ||
-    'Permohonan keringanan atau penundaan pembayaran tagihan sekolah.'
+  const keteranganMekanisme = mengangsur
+    ? `Mengangsur tiap bulan sebesar ${rupiahKeringanan(nominalAngsuran)}`
+    : 'Cash / Tunai'
 
   const baris = {
     unit,
@@ -169,7 +190,10 @@ export async function ajukanKeringanan(input: {
     nama_siswa: namaSiswa,
     kelas,
     nominal_tunggakan: nominalTunggakan,
-    kesanggupan_bayar: String(nominalKesanggupan),
+    jenis_kegiatan: jenisKegiatan,
+    mekanisme_pelunasan: keteranganMekanisme,
+    nominal_angsuran: mengangsur ? nominalAngsuran : null,
+    kesanggupan_bayar: mengangsur ? String(nominalAngsuran) : 'Cash / Tunai',
     tanggal_rencana_lunas: rencana.toISOString(),
     alasan_pengajuan: alasan.slice(0, 2000),
     status_persetujuan: 'Pending' as const,

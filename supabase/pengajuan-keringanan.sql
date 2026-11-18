@@ -11,6 +11,9 @@ create table if not exists public.tabel_pengajuan_keringanan (
   nomor_surat text not null default '-',
   kesanggupan_bayar text not null,
   alasan_pengajuan text not null default '',
+  jenis_kegiatan text not null default '',
+  mekanisme_pelunasan text not null default '',
+  nominal_angsuran numeric,
   tanggal_rencana_lunas timestamptz not null,
   status_persetujuan text not null default 'Pending',
   nomor_surat_rekomendasi text,
@@ -28,6 +31,9 @@ alter table public.tabel_pengajuan_keringanan add column if not exists nominal_t
 alter table public.tabel_pengajuan_keringanan add column if not exists nomor_surat text default '-';
 alter table public.tabel_pengajuan_keringanan add column if not exists kesanggupan_bayar text;
 alter table public.tabel_pengajuan_keringanan add column if not exists alasan_pengajuan text not null default '';
+alter table public.tabel_pengajuan_keringanan add column if not exists jenis_kegiatan text not null default '';
+alter table public.tabel_pengajuan_keringanan add column if not exists mekanisme_pelunasan text not null default '';
+alter table public.tabel_pengajuan_keringanan add column if not exists nominal_angsuran numeric;
 alter table public.tabel_pengajuan_keringanan add column if not exists tanggal_rencana_lunas timestamptz;
 alter table public.tabel_pengajuan_keringanan add column if not exists status_persetujuan text not null default 'Pending';
 alter table public.tabel_pengajuan_keringanan add column if not exists nomor_surat_rekomendasi text;

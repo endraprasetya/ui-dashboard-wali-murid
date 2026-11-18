@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Wallet } from 'lucide-react'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { TombolAjukanKeringanan } from '@/components/dashboard/pengajuan-keringanan'
+import { SegarkanPengajuan } from '@/components/dashboard/segarkan-pengajuan'
 import { NoticeStatusKeringanan } from '@/components/dashboard/notice-status-keringanan'
 import { ambilKeuanganAmpss } from '@/lib/ampss'
 import type { TagihanAmpss } from '@/lib/ampss-parse'
@@ -9,6 +10,8 @@ import { muatPengajuanUntukNis, pengajuanTerbaru } from '@/lib/pengajuan-keringa
 import { muatPortal } from '@/lib/muat-portal'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Keuangan | Portal Wali Murid',
@@ -56,6 +59,7 @@ export default async function KeuanganPage() {
 
   return (
     <PortalKerangka nama={dashboard.student.name} inisial={dashboard.student.initials} unit={dashboard.student.unit} aktif="/keuangan" notifikasi={notifikasi}>
+      <SegarkanPengajuan />
       <section className="rounded-3xl border bg-card p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-3">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">

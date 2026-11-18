@@ -3,7 +3,7 @@ import { kelasToneKeringanan, ringkasanStatusKeringanan } from '@/lib/pengajuan-
 
 /** Banner status permanen pengajuan keringanan (di bawah tombol di halaman Keuangan). */
 export function NoticeStatusKeringanan({ pengajuan }: { pengajuan: PengajuanKeringanan }) {
-  const { tone, judul, deskripsi, labelStatus } = ringkasanStatusKeringanan(pengajuan)
+  const { tone, deskripsi, labelStatus } = ringkasanStatusKeringanan(pengajuan)
 
   return (
     <aside
@@ -11,8 +11,7 @@ export function NoticeStatusKeringanan({ pengajuan }: { pengajuan: PengajuanKeri
       role="status"
       aria-live="polite"
     >
-      <p className="text-sm font-extrabold">Status: {labelStatus}</p>
-      {judul !== labelStatus ? <p className="mt-1 font-bold">{judul}</p> : null}
+      <p className="text-sm font-extrabold">{labelStatus}</p>
       <p className="mt-1 font-medium opacity-95">{deskripsi}</p>
     </aside>
   )

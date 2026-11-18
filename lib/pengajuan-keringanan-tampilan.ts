@@ -10,6 +10,9 @@ export type PengajuanKeringanan = {
   nominalTunggakan: number
   kesanggupanBayar: string
   alasanPengajuan: string
+  jenisKegiatan: string
+  mekanismePelunasan: string
+  nominalAngsuran: number
   nomorSurat: string
   tanggalRencanaLunas: string
   statusPersetujuan: StatusPengajuanKeringanan
@@ -20,6 +23,42 @@ export type PengajuanKeringanan = {
   diputuskanPada: string
   suratResmiIsi: string
   suratResmiDikirimPada: string
+}
+
+export const JENIS_KEGIATAN_PENGAJUAN = [
+  'ASTS I',
+  'Pengambilan rapor ASTS I',
+  'ASAS',
+  'Pengambilan rapor ASAS',
+  'ASTS II',
+  'Pengambilan rapor ASTS II',
+  'ASAT',
+  'Pengambilan rapor ASAT',
+] as const
+
+export const MEKANISME_PELUNASAN = ['Cash / Tunai', 'Mengangsur tiap bulan'] as const
+
+export type JenisKegiatanPengajuan = (typeof JENIS_KEGIATAN_PENGAJUAN)[number]
+export type MekanismePelunasan = (typeof MEKANISME_PELUNASAN)[number]
+
+export function judulPengajuanKegiatan(jenis?: string) {
+  const nama = String(jenis || '').trim()
+  return nama ? `Pengajuan mengikuti kegiatan ${nama}` : 'Pengajuan mengikuti kegiatan'
+}
+
+export function statusDisetujuiKegiatan(jenis?: string) {
+  const nama = String(jenis || '').trim() || 'kegiatan'
+  return `Pengajuan mengikuti ${nama} telah disetujui oleh Kepala Sekolah`
+}
+
+export function keteranganPelunasanPengajuan(pengajuan: Pick<PengajuanKeringanan, 'nominalTunggakan' | 'nominalAngsuran' | 'mekanismePelunasan' | 'tanggalRencanaLunas'>) {
+  const tunggakan = rupiahKeringanan(pengajuan.nominalTunggakan)
+  const mengangsur = pengajuan.nominalAngsuran > 0 || /angsur/i.test(pengajuan.mekanismePelunasan)
+  if (mengangsur && pengajuan.nominalAngsuran > 0) {
+    return `Sesuai dengan pernyataan yang dibuat, tunggakan sebesar ${tunggakan} akan diangsur setiap bulan sebesar ${rupiahKeringanan(pengajuan.nominalAngsuran)}`
+  }
+  const tanggal = formatTanggalKeringanan(pengajuan.tanggalRencanaLunas) || 'tanggal yang direncanakan'
+  return `Sesuai dengan pernyataan yang dibuat, tunggakan sebesar ${tunggakan} akan dilunasi secara tunai pada tanggal ${tanggal}`
 }
 
 export const KLAUSUL_SURAT_KERINGANAN_WAJIB =
@@ -53,44 +92,33 @@ export type RingkasanStatusKeringanan = {
 
 /** Teks notice/banner status pengajuan keringanan (Keuangan & Beranda). */
 export function ringkasanStatusKeringanan(pengajuan: PengajuanKeringanan): RingkasanStatusKeringanan {
-  const suratTerkirim = Boolean(pengajuan.suratResmiDikirimPada?.trim())
+  const judul = judulPengajuanKegiatan(pengajuan.jenisKegiatan)
 
   if (pengajuan.statusPersetujuan === 'Pending') {
     return {
       tone: 'amber',
-      labelStatus: 'Menunggu Persetujuan Kepala Sekolah',
-      judul: 'Pengajuan keringanan sedang diproses',
-      deskripsi:
-        'Permohonan keringanan Anda telah dikirim dan sedang menunggu persetujuan Kepala Sekolah. Anda akan mendapat tahu setelah keputusan diterbitkan.',
+      labelStatus: 'Menunggu persetujuan Kepala Sekolah',
+      judul,
+      deskripsi: 'Pengajuan telah dikirim dan sedang menunggu persetujuan Kepala Sekolah.',
     }
   }
 
   if (pengajuan.statusPersetujuan === 'Ditolak') {
     return {
       tone: 'rose',
-      labelStatus: 'Ditolak',
-      judul: 'Pengajuan keringanan ditolak',
+      labelStatus: 'Pengajuan ditolak',
+      judul,
       deskripsi:
         pengajuan.catatanKeputusan?.trim() ||
         'Pengajuan tidak disetujui. Anda dapat mengajukan permohonan kembali dari halaman Keuangan jika diperlukan.',
     }
   }
 
-  if (pengajuan.statusPersetujuan === 'Disetujui' && !suratTerkirim) {
-    return {
-      tone: 'emerald',
-      labelStatus: 'Disetujui',
-      judul: 'Pengajuan disetujui, silakan lengkapi surat resmi',
-      deskripsi:
-        'Keputusan persetujuan telah diterbitkan. Silakan lengkapi dan kirim Surat Resmi Pernyataan Kesanggupan di bagian Keuangan.',
-    }
-  }
-
   return {
-    tone: 'sky',
-    labelStatus: 'Surat resmi telah dikirim.',
-    judul: 'Surat resmi telah dikirim.',
-    deskripsi: 'Segera lakukan kesanggupannya sesuai surat tersebut.',
+    tone: 'emerald',
+    labelStatus: statusDisetujuiKegiatan(pengajuan.jenisKegiatan),
+    judul,
+    deskripsi: keteranganPelunasanPengajuan(pengajuan),
   }
 }
 
