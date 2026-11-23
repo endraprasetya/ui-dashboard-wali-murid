@@ -46,6 +46,28 @@ export function judulPengajuanKegiatan(jenis?: string) {
   return nama ? `Pengajuan mengikuti kegiatan ${nama}` : 'Pengajuan mengikuti kegiatan'
 }
 
+export function labelMekanismePelunasan(pengajuan: Pick<PengajuanKeringanan, 'mekanismePelunasan' | 'nominalAngsuran' | 'kesanggupanBayar'>) {
+  const teks = `${pengajuan.mekanismePelunasan} ${pengajuan.kesanggupanBayar}`.toLowerCase()
+  if (pengajuan.nominalAngsuran > 0 || /angsur/.test(teks)) {
+    return pengajuan.nominalAngsuran > 0
+      ? `Mengangsur tiap bulan · ${rupiahKeringanan(pengajuan.nominalAngsuran)}`
+      : 'Mengangsur tiap bulan'
+  }
+  return 'Cash / Tunai'
+}
+
+export function tanggalLokalJakarta(offsetHari = 0) {
+  const hariIni = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+  if (offsetHari === 0) return hariIni
+  const [tahun, bulan, tanggal] = hariIni.split('-').map(Number)
+  return new Date(Date.UTC(tahun, bulan - 1, tanggal + offsetHari)).toISOString().slice(0, 10)
+}
+
 export function statusDisetujuiKegiatan(jenis?: string) {
   const nama = String(jenis || '').trim() || 'kegiatan'
   return `Pengajuan mengikuti ${nama} telah disetujui oleh Kepala Sekolah`

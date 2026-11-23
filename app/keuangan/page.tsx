@@ -96,6 +96,7 @@ export default async function KeuanganPage() {
               tunggakan={keuangan.ringkas.belumTerbayar}
               yatim={keuangan.yatim}
               pengajuan={pengajuanKeringanan}
+              daftar={daftarKeringanan}
             />
 
             <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

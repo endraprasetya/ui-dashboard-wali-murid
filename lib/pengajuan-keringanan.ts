@@ -3,7 +3,6 @@ import 'server-only'
 import { unstable_noStore as noStore } from 'next/cache'
 import {
   JENIS_KEGIATAN_PENGAJUAN,
-  MEKANISME_PELUNASAN,
   STATUS_PENGAJUAN_KERINGANAN,
   rupiahKeringanan,
   type PengajuanKeringanan,
@@ -17,7 +16,7 @@ export type { PengajuanKeringanan, StatusPengajuanKeringanan } from '@/lib/penga
 const TABEL = 'tabel_pengajuan_keringanan'
 
 const KOLOM_BALIK_INSERT =
-  'id,unit,nis,nama_siswa,kelas,nominal_tunggakan,kesanggupan_bayar,tanggal_rencana_lunas,alasan_pengajuan,status_persetujuan,dibuat_pada'
+  'id,unit,nis,nama_siswa,kelas,nominal_tunggakan,kesanggupan_bayar,tanggal_rencana_lunas,alasan_pengajuan,status_persetujuan,jenis_kegiatan,mekanisme_pelunasan,nominal_angsuran,dibuat_pada'
 
 const KOLOM_SURAT =
   'id,unit,nis,nama_siswa,kelas,nominal_tunggakan,kesanggupan_bayar,tanggal_rencana_lunas,alasan_pengajuan,status_persetujuan,surat_resmi_isi,surat_resmi_dikirim_pada,dibuat_pada'
@@ -45,14 +44,25 @@ export function nisUntukKeringanan(nis?: string, idSiswa?: string) {
 }
 
 function statusSah(nilai: unknown): nilai is StatusPengajuanKeringanan {
-  return (STATUS_PENGAJUAN_KERINGANAN as readonly string[]).includes(String(nilai || ''))
+  const teks = String(nilai || '').trim()
+  return (STATUS_PENGAJUAN_KERINGANAN as readonly string[]).includes(teks)
+}
+
+function mekanismeDariTeks(nilai: string, nominalAngsuran = 0) {
+  const teks = nilai.toLowerCase()
+  if (nominalAngsuran > 0 || /angsur/.test(teks)) return 'Mengangsur tiap bulan'
+  if (/cash|tunai/.test(teks)) return 'Cash / Tunai'
+  return String(nilai || '').trim()
 }
 
 function petakan(row: Record<string, unknown>): PengajuanKeringanan | null {
-  const status = row.status_persetujuan
-  if (!statusSah(status)) return null
+  const statusMentah = String(row.status_persetujuan || 'Pending').trim() || 'Pending'
+  const status = statusSah(statusMentah) ? statusMentah : 'Pending'
   const nis = String(row.nis || '').trim()
   if (!nis) return null
+  const nominalAngsuran = Number(row.nominal_angsuran) || 0
+  const alasanPengajuan = String(row.alasan_pengajuan || '')
+  const jenisDariAlasan = /^\[([^\]]+)\]/.exec(alasanPengajuan)?.[1] || ''
   return {
     id: String(row.id || ''),
     nis,
@@ -61,10 +71,10 @@ function petakan(row: Record<string, unknown>): PengajuanKeringanan | null {
     unit: String(row.unit || ''),
     nominalTunggakan: Number(row.nominal_tunggakan) || 0,
     kesanggupanBayar: String(row.kesanggupan_bayar || ''),
-    alasanPengajuan: String(row.alasan_pengajuan || ''),
-    jenisKegiatan: String(row.jenis_kegiatan || ''),
-    mekanismePelunasan: String(row.mekanisme_pelunasan || ''),
-    nominalAngsuran: Number(row.nominal_angsuran) || 0,
+    alasanPengajuan,
+    jenisKegiatan: String(row.jenis_kegiatan || jenisDariAlasan || ''),
+    mekanismePelunasan: mekanismeDariTeks(String(row.mekanisme_pelunasan || row.kesanggupan_bayar || alasanPengajuan || ''), nominalAngsuran),
+    nominalAngsuran,
     nomorSurat: String(row.nomor_surat || ''),
     tanggalRencanaLunas: String(row.tanggal_rencana_lunas || ''),
     statusPersetujuan: status,
@@ -147,10 +157,11 @@ export async function ajukanKeringanan(input: {
   const rencana = new Date(tanggalRencanaLunas)
   const nominalTunggakan = Math.round(Number(input.nominalTunggakan))
   const jenisKegiatan = String(input.jenisKegiatan || '').trim()
-  const mekanismePelunasan = String(input.mekanismePelunasan || '').trim()
+  const mekanismeMentah = String(input.mekanismePelunasan || '').trim()
   const alasan = String(input.alasanPengajuan || '').trim()
   const nominalAngsuran = Math.round(Number(input.nominalAngsuran) || 0)
-  const mengangsur = mekanismePelunasan === 'Mengangsur tiap bulan'
+  const mengangsur = /angsur/i.test(mekanismeMentah)
+  const mekanismePelunasan = mengangsur ? 'Mengangsur tiap bulan' : 'Cash / Tunai'
 
   if (!nis || nis.length < 3) throw new Error('NIS siswa belum terbaca. Lengkapi data siswa terlebih dahulu.')
   if (!namaSiswa) throw new Error('Nama siswa belum terbaca.')
@@ -160,7 +171,7 @@ export async function ajukanKeringanan(input: {
     throw new Error('Jenis kegiatan / keperluan wajib dipilih.')
   }
   if (!alasan) throw new Error('Alasan pengajuan rekomendasi wajib diisi.')
-  if (!(MEKANISME_PELUNASAN as readonly string[]).includes(mekanismePelunasan)) {
+  if (!/cash|tunai|angsur/i.test(mekanismeMentah.replace(/\s/g, ' '))) {
     throw new Error('Mekanisme pelunasan wajib dipilih.')
   }
   if (mengangsur && !(nominalAngsuran > 0)) throw new Error('Nominal angsuran wajib diisi.')
@@ -184,7 +195,7 @@ export async function ajukanKeringanan(input: {
     ? `Mengangsur tiap bulan sebesar ${rupiahKeringanan(nominalAngsuran)}`
     : 'Cash / Tunai'
 
-  const baris = {
+  const barisLengkap = {
     unit,
     nis,
     nama_siswa: namaSiswa,
@@ -192,21 +203,68 @@ export async function ajukanKeringanan(input: {
     nominal_tunggakan: nominalTunggakan,
     jenis_kegiatan: jenisKegiatan,
     mekanisme_pelunasan: keteranganMekanisme,
-    nominal_angsuran: mengangsur ? nominalAngsuran : null,
-    kesanggupan_bayar: mengangsur ? String(nominalAngsuran) : 'Cash / Tunai',
+    nominal_angsuran: mengangsur ? nominalAngsuran : 0,
+    kesanggupan_bayar: mengangsur ? String(nominalAngsuran) : String(nominalTunggakan),
     tanggal_rencana_lunas: rencana.toISOString(),
     alasan_pengajuan: alasan.slice(0, 2000),
     status_persetujuan: 'Pending' as const,
   }
+  const barisInti = {
+    unit,
+    nis,
+    nama_siswa: namaSiswa,
+    kelas,
+    nominal_tunggakan: nominalTunggakan,
+    kesanggupan_bayar: mengangsur ? String(nominalAngsuran) : String(nominalTunggakan),
+    tanggal_rencana_lunas: rencana.toISOString(),
+    alasan_pengajuan: `[${jenisKegiatan}] ${keteranganMekanisme}. ${alasan}`.slice(0, 2000),
+    status_persetujuan: 'Pending' as const,
+  }
 
   const supabase = getSupabase()
-  const { data, error } = await supabase.from(TABEL).insert([baris]).select(KOLOM_BALIK_INSERT).single()
+  const lengkap = await supabase.from(TABEL).insert([barisLengkap]).select('*').single()
+  let data = lengkap.data
+  let error = lengkap.error
+  if (error && /column|schema cache|null value|invalid input syntax|numeric/i.test(error.message)) {
+    const ulang = await supabase.from(TABEL).insert([barisInti]).select('*').single()
+    data = ulang.data
+    error = ulang.error
+  }
 
   if (error) throw new Error(error.message)
 
-  const hasil = petakan(data as Record<string, unknown>)
-  if (!hasil) throw new Error('Pengajuan tersimpan, tetapi balasan database belum dapat dibaca.')
-  return hasil
+  const hasil = petakan((data || {}) as Record<string, unknown>)
+  if (hasil) {
+    return {
+      ...hasil,
+      jenisKegiatan: hasil.jenisKegiatan || jenisKegiatan,
+      mekanismePelunasan: hasil.mekanismePelunasan || mekanismePelunasan,
+      nominalAngsuran: hasil.nominalAngsuran || (mengangsur ? nominalAngsuran : 0),
+    }
+  }
+  return {
+    id: String((data as { id?: unknown } | null)?.id || ''),
+    nis,
+    namaSiswa,
+    kelas,
+    unit,
+    nominalTunggakan,
+    kesanggupanBayar: mengangsur ? String(nominalAngsuran) : String(nominalTunggakan),
+    alasanPengajuan: alasan,
+    jenisKegiatan,
+    mekanismePelunasan,
+    nominalAngsuran: mengangsur ? nominalAngsuran : 0,
+    nomorSurat: '-',
+    tanggalRencanaLunas: rencana.toISOString(),
+    statusPersetujuan: 'Pending',
+    nomorSuratRekomendasi: '',
+    catatanKeputusan: '',
+    suratResmiIsi: '',
+    suratResmiDikirimPada: '',
+    dibuatPada: new Date().toISOString(),
+    diperbaruiPada: '',
+    diputuskanPada: '',
+  }
 }
 
 export async function simpanSuratResmiKeringanan(

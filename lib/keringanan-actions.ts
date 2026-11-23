@@ -36,15 +36,15 @@ export async function kirimPengajuanKeringanan(input: {
   tanggalRencanaLunas: string
   nominalTunggakan: number
   alasanPengajuan: string
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; pengajuan: PengajuanKeringanan | null }> {
   const session = await getSession()
-  if (!session || !isStudentId(session.idSiswa)) return { error: 'Sesi berakhir. Silakan masuk lagi.' }
+  if (!session || !isStudentId(session.idSiswa)) return { error: 'Sesi berakhir. Silakan masuk lagi.', pengajuan: null }
 
   const siswa = await muatSiswaUnit(session.idSiswa)
-  if (!siswa) return { error: 'Data siswa tidak dikenali.' }
+  if (!siswa) return { error: 'Data siswa tidak dikenali.', pengajuan: null }
 
   try {
-    await ajukanKeringanan({
+    const pengajuan = await ajukanKeringanan({
       nis: nisUntukKeringanan(siswa.nis, siswa.idSiswa),
       namaSiswa: siswa.nama,
       kelas: siswa.kelas,
@@ -59,10 +59,10 @@ export async function kirimPengajuanKeringanan(input: {
     updateTag(`wali:${session.idSiswa}`)
     revalidatePath('/')
     revalidatePath('/keuangan')
-    return { error: null }
+    return { error: null, pengajuan }
   } catch (cause) {
     const pesan = cause instanceof Error ? cause.message : 'Pengajuan belum dapat dikirim.'
-    return { error: pesan }
+    return { error: pesan, pengajuan: null }
   }
 }
 

@@ -1,25 +1,22 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, FileText, X } from 'lucide-react'
 import { kirimPengajuanKeringanan } from '@/lib/keringanan-actions'
 import { NoticeStatusKeringanan } from '@/components/dashboard/notice-status-keringanan'
 import { PratinjauSuratRekomendasi } from '@/components/dashboard/pratinjau-surat-keringanan'
 import {
+  formatTanggalKeringanan,
   JENIS_KEGIATAN_PENGAJUAN,
   judulPengajuanKegiatan,
+  labelMekanismePelunasan,
   MEKANISME_PELUNASAN,
   rupiahKeringanan,
+  tanggalLokalJakarta,
   type PengajuanKeringanan,
   type StatusPengajuanKeringanan,
 } from '@/lib/pengajuan-keringanan-tampilan'
-
-function defaultTanggal() {
-  const d = new Date()
-  d.setDate(d.getDate() + 7)
-  return d.toISOString().slice(0, 10)
-}
 
 function ModalKonfirmasi({
   judul,
@@ -50,30 +47,49 @@ function ModalKonfirmasi({
   )
 }
 
+function kelasStatus(status: StatusPengajuanKeringanan) {
+  if (status === 'Disetujui') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'Ditolak') return 'bg-rose-100 text-rose-800'
+  return 'bg-amber-100 text-amber-900'
+}
+
 export function TombolAjukanKeringanan({
   tunggakan,
   yatim,
   pengajuan,
+  daftar = [],
 }: {
   tunggakan: number
   yatim?: boolean
   pengajuan: PengajuanKeringanan | null
+  daftar?: PengajuanKeringanan[]
 }) {
   const router = useRouter()
   const [modal, setModal] = useState(false)
   const [jenis, setJenis] = useState('')
   const [mekanisme, setMekanisme] = useState('')
   const [angsuran, setAngsuran] = useState('')
-  const [tanggal, setTanggal] = useState(defaultTanggal)
+  const [tanggal, setTanggal] = useState(() => tanggalLokalJakarta(7))
   const [alasan, setAlasan] = useState('')
   const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState('')
   const [konfirmasiAwal, setKonfirmasiAwal] = useState(false)
   const [pratinjau, setPratinjau] = useState(false)
+  const [lokal, setLokal] = useState<PengajuanKeringanan[]>([])
 
-  const status: StatusPengajuanKeringanan | null = pengajuan?.statusPersetujuan ?? null
+  const riwayat = useMemo(() => {
+    const gabung = [...lokal, ...daftar, pengajuan].filter((item): item is PengajuanKeringanan => Boolean(item))
+    const unik = new Map<string, PengajuanKeringanan>()
+    for (const item of gabung) {
+      const kunci = item.id || `${item.jenisKegiatan}-${item.dibuatPada}`
+      if (!unik.has(kunci)) unik.set(kunci, item)
+    }
+    return [...unik.values()].sort((a, b) => b.dibuatPada.localeCompare(a.dibuatPada))
+  }, [daftar, lokal, pengajuan])
+  const terkini = riwayat[0] ?? pengajuan
+  const status: StatusPengajuanKeringanan | null = terkini?.statusPersetujuan ?? null
   const bolehAjukan = !yatim && tunggakan > 0 && (!status || status === 'Ditolak')
-  const judulKartu = judulPengajuanKegiatan(pengajuan?.jenisKegiatan)
+  const judulKartu = judulPengajuanKegiatan(terkini?.jenisKegiatan)
 
   const kirimPengajuan = async (event: FormEvent) => {
     event.preventDefault()
@@ -83,7 +99,7 @@ export function TombolAjukanKeringanan({
     const hasil = await kirimPengajuanKeringanan({
       jenisKegiatan: jenis,
       mekanismePelunasan: mekanisme,
-      nominalAngsuran: mekanisme === 'Mengangsur tiap bulan' ? angkaAngsuran : 0,
+      nominalAngsuran: /angsur/i.test(mekanisme) ? angkaAngsuran : 0,
       tanggalRencanaLunas: tanggal,
       nominalTunggakan: tunggakan,
       alasanPengajuan: alasan.trim(),
@@ -93,6 +109,7 @@ export function TombolAjukanKeringanan({
       setGalat(hasil.error)
       return
     }
+    if (hasil.pengajuan) setLokal((sekarang) => [hasil.pengajuan!, ...sekarang])
     setModal(false)
     setJenis('')
     setMekanisme('')
@@ -106,8 +123,8 @@ export function TombolAjukanKeringanan({
     router.refresh()
   }
 
-  if (!pengajuan && (yatim || tunggakan <= 0)) return null
-  const disetujui = status === 'Disetujui' && Boolean(pengajuan)
+  if (!terkini && (yatim || tunggakan <= 0)) return null
+  const disetujui = status === 'Disetujui' && Boolean(terkini)
 
   return (
     <>
@@ -132,9 +149,27 @@ export function TombolAjukanKeringanan({
               </button>
             ) : null}
 
-            {pengajuan ? <NoticeStatusKeringanan pengajuan={pengajuan} /> : null}
+            {terkini ? <NoticeStatusKeringanan pengajuan={terkini} /> : null}
 
-            {disetujui && pengajuan ? (
+            {riwayat.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {riwayat.map((item) => (
+                  <li key={item.id || `${item.jenisKegiatan}-${item.dibuatPada}`} className="rounded-xl border bg-white px-3 py-2.5 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-extrabold text-foreground">{judulPengajuanKegiatan(item.jenisKegiatan)}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${kelasStatus(item.statusPersetujuan)}`}>
+                        {item.statusPersetujuan}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">Jenis kegiatan: {item.jenisKegiatan || '—'}</p>
+                    <p className="text-muted-foreground">Rencana pelunasan: {formatTanggalKeringanan(item.tanggalRencanaLunas) || '—'}</p>
+                    <p className="text-muted-foreground">Mekanisme: {labelMekanismePelunasan(item)}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {disetujui && terkini ? (
               <button
                 type="button"
                 onClick={() => setPratinjau(true)}
@@ -151,13 +186,13 @@ export function TombolAjukanKeringanan({
 
       {konfirmasiAwal ? (
         <ModalKonfirmasi
-          judul="Pengajuan berhasil disimpan"
-          pesan="Form pengajuan keringanan telah tersimpan dengan status Pending. Pengajuan Anda sedang menunggu persetujuan Kepala Sekolah."
+          judul="Pengajuan berhasil dikirim"
+          pesan="Pengajuan mengikuti kegiatan telah terkirim dan sedang menunggu pemeriksaan/persetujuan Kepala Sekolah."
           onTutup={tutupKonfirmasiAwal}
         />
       ) : null}
 
-      {pratinjau && pengajuan ? <PratinjauSuratRekomendasi pengajuan={pengajuan} onTutup={() => setPratinjau(false)} /> : null}
+      {pratinjau && terkini ? <PratinjauSuratRekomendasi pengajuan={terkini} onTutup={() => setPratinjau(false)} /> : null}
 
       {modal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true">
@@ -190,7 +225,7 @@ export function TombolAjukanKeringanan({
               </label>
               <label className="block text-xs font-semibold text-foreground">
                 Tanggal Rencana Pelunasan
-                <input type="date" required value={tanggal} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setTanggal(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
+                <input type="date" required value={tanggal} min={tanggalLokalJakarta()} onChange={(e) => setTanggal(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
               </label>
               <label className="block text-xs font-semibold text-foreground">
                 Mekanisme Pelunasan
