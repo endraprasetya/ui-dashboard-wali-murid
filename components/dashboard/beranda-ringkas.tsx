@@ -7,7 +7,6 @@ import {
   NotebookPen,
   ShieldCheck,
   UserRound,
-  Wallet,
 } from 'lucide-react'
 import { KotakRingkas } from '@/components/dashboard/kotak-ringkas'
 import { TabelTugasRumah } from '@/components/dashboard/tabel-tugas-rumah'
@@ -16,17 +15,6 @@ import type { DashboardData, JurnalEntry, TertibEntry } from '@/lib/queries'
 import { labelMapelGuru, todayIso } from '@/lib/format'
 import { agendaMendatang } from '@/lib/pengumuman'
 import { adaIsiTugas, dahulukanBelumDikerjakan, sudahDikonfirmasi } from '@/lib/tugas-status'
-
-type RingkasKeuangan = {
-  error: string | null
-  ringkas: { terbayar: number; belumTerbayar: number }
-  tagihan: { keterangan: string; jumlah: number }[]
-  yatim?: boolean
-}
-
-function rupiah(nilai: number) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(nilai)
-}
 
 function Baris({ kiri, kanan }: { kiri: string; kanan: string }) {
   return (
@@ -54,11 +42,9 @@ function tugasTerbuka(baris: { id: string; tanggal: string; tugas: string; statu
 export function BerandaRingkas({
   data,
   diri,
-  keuangan = null,
 }: {
   data: DashboardData
   diri: HasilDataDiri
-  keuangan?: RingkasKeuangan | null
 }) {
   const siswa = data.student
   if (!siswa) return null
@@ -234,29 +220,6 @@ export function BerandaRingkas({
               )}
             </div>
           )}
-        </div>
-      </KotakRingkas>
-
-      <KotakRingkas href="/keuangan" judul="Informasi Keuangan" ikon={Wallet} nada="teal" className="kartu-keuangan">
-        <div className="isi-kartu rounded-2xl p-3 shadow-sm">
-          <p className="text-sm font-medium leading-relaxed">
-            Informasi administrasi SPP, Daftar Ulang PSB, Ujian, Ekstrakurikuler, Buku Paket dan lainnya
-          </p>
-          {keuangan && !keuangan.error ? (
-            <ul className="mt-2 border-t border-slate-200 pt-1">
-              {keuangan.yatim ? <Baris kiri="Status" kanan="Yatim - Gratis" /> : null}
-              <Baris kiri={keuangan.yatim ? 'Tagihan aktif' : 'Belum terbayar'} kanan={rupiah(keuangan.ringkas.belumTerbayar)} />
-              <Baris kiri="Sudah terbayar" kanan={rupiah(keuangan.ringkas.terbayar)} />
-            </ul>
-          ) : null}
-          {keuangan && !keuangan.error && !keuangan.yatim && keuangan.ringkas.belumTerbayar > 0 ? (
-            <Link
-              href="/keuangan#keringanan"
-              className="tombol-buka mt-2 inline-flex items-center rounded-xl px-3.5 py-2 text-xs font-bold"
-            >
-              Ajukan keringanan / penundaan pembayaran
-            </Link>
-          ) : null}
         </div>
       </KotakRingkas>
 

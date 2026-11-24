@@ -5,6 +5,7 @@ import { BannerKeringananWali } from '@/components/dashboard/banner-keringanan-w
 import { SegarkanPengajuan } from '@/components/dashboard/segarkan-pengajuan'
 import { JadwalAsasWali } from '@/components/dashboard/jadwal-asas-wali'
 import { MateriHafalanAsasWali } from '@/components/dashboard/materi-hafalan-asas'
+import { InformasiKeuanganBeranda } from '@/components/dashboard/informasi-keuangan-beranda'
 import { PengingatAsasWali } from '@/components/dashboard/pengingat-asas-wali'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { UjianBanner } from '@/components/dashboard/ujian-banner'
@@ -44,13 +45,20 @@ export default async function DashboardPage() {
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} />
       <GreetingHero student={dashboard.student} />
       <PengingatAsasWali />
+      <InformasiKeuanganBeranda
+        error={keuangan.error}
+        belumTerbayar={keuangan.ringkas.belumTerbayar}
+        terbayar={keuangan.ringkas.terbayar}
+        yatim={keuangan.yatim}
+        pengajuan={keringanan}
+      />
       <JadwalAsasWali kelas={dashboard.student.kelas} />
       <MateriHafalanAsasWali materi={materiHafalan.materi} galat={materiHafalan.galat} />
       <SegarkanPengajuan />
       {keringanan ? <BannerKeringananWali pengajuan={keringanan} /> : null}
       {hasilTerbaru.length > 0 ? <UjianQiroahRiwayat baris={hasilTerbaru} profil={profil} varian="beranda" /> : null}
       <UjianBanner jadwal={dashboard.jadwalUjian} />
-      <BerandaRingkas data={dashboard} diri={diri} keuangan={keuangan} />
+      <BerandaRingkas data={dashboard} diri={diri} />
     </PortalKerangka>
   )
 }

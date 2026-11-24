@@ -53,6 +53,133 @@ function kelasStatus(status: StatusPengajuanKeringanan) {
   return 'bg-amber-100 text-amber-900'
 }
 
+export function ModalAjukanKegiatan({
+  buka,
+  tunggakan,
+  onTutup,
+  onSukses,
+}: {
+  buka: boolean
+  tunggakan: number
+  onTutup: () => void
+  onSukses: (pengajuan?: PengajuanKeringanan | null) => void
+}) {
+  const [jenis, setJenis] = useState('')
+  const [mekanisme, setMekanisme] = useState('')
+  const [angsuran, setAngsuran] = useState('')
+  const [tanggal, setTanggal] = useState(() => tanggalLokalJakarta(7))
+  const [alasan, setAlasan] = useState('')
+  const [menyimpan, setMenyimpan] = useState(false)
+  const [galat, setGalat] = useState('')
+
+  if (!buka) return null
+
+  const kirim = async (event: FormEvent) => {
+    event.preventDefault()
+    setMenyimpan(true)
+    setGalat('')
+    const angkaAngsuran = Number(String(angsuran).replace(/\D/g, ''))
+    const hasil = await kirimPengajuanKeringanan({
+      jenisKegiatan: jenis,
+      mekanismePelunasan: mekanisme,
+      nominalAngsuran: /angsur/i.test(mekanisme) ? angkaAngsuran : 0,
+      tanggalRencanaLunas: tanggal,
+      nominalTunggakan: tunggakan,
+      alasanPengajuan: alasan.trim(),
+    })
+    setMenyimpan(false)
+    if (hasil.error) {
+      setGalat(hasil.error)
+      return
+    }
+    setJenis('')
+    setMekanisme('')
+    setAngsuran('')
+    setAlasan('')
+    onTutup()
+    onSukses(hasil.pengajuan)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true">
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-card p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-base font-bold leading-snug text-foreground">Ajukan mengikuti kegiatan</h2>
+          <button type="button" onClick={onTutup} className="rounded-lg p-1 text-muted-foreground hover:bg-muted" aria-label="Tutup">
+            <X className="size-5" />
+          </button>
+        </div>
+        <form onSubmit={(e) => void kirim(e)} className="mt-4 space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground">Total Tunggakan</p>
+            <p className="mt-1 text-2xl font-extrabold tracking-tight text-foreground">{rupiahKeringanan(tunggakan)}</p>
+          </div>
+          <label className="block text-xs font-semibold text-foreground">
+            Jenis Kegiatan / Keperluan
+            <select required value={jenis} onChange={(e) => setJenis(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm">
+              <option value="">Pilih jenis kegiatan</option>
+              {JENIS_KEGIATAN_PENGAJUAN.map((opsi) => (
+                <option key={opsi} value={opsi}>
+                  {opsi}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-foreground">
+            Alasan Pengajuan Rekomendasi
+            <textarea required value={alasan} onChange={(e) => setAlasan(e.target.value)} rows={3} maxLength={2000} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
+          </label>
+          <label className="block text-xs font-semibold text-foreground">
+            Tanggal Rencana Pelunasan
+            <input type="date" required value={tanggal} min={tanggalLokalJakarta()} onChange={(e) => setTanggal(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
+          </label>
+          <label className="block text-xs font-semibold text-foreground">
+            Mekanisme Pelunasan
+            <select
+              required
+              value={mekanisme}
+              onChange={(e) => {
+                setMekanisme(e.target.value)
+                if (e.target.value !== 'Mengangsur tiap bulan') setAngsuran('')
+              }}
+              className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
+            >
+              <option value="">Pilih mekanisme pelunasan</option>
+              {MEKANISME_PELUNASAN.map((opsi) => (
+                <option key={opsi} value={opsi}>
+                  {opsi}
+                </option>
+              ))}
+            </select>
+          </label>
+          {mekanisme === 'Mengangsur tiap bulan' ? (
+            <label className="block text-xs font-semibold text-foreground">
+              sebesar Rp
+              <input
+                inputMode="numeric"
+                required
+                value={angsuran}
+                onChange={(e) => setAngsuran(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder="Nominal angsuran tiap bulan"
+                className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
+              />
+            </label>
+          ) : null}
+          {galat ? <p className="text-xs text-destructive">{galat}</p> : null}
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onTutup} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">
+              Batal
+            </button>
+            <button type="submit" disabled={menyimpan} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60">
+              {menyimpan ? 'Mengirim...' : 'Kirim pengajuan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export function TombolAjukanKeringanan({
   tunggakan,
   yatim,
@@ -66,12 +193,6 @@ export function TombolAjukanKeringanan({
 }) {
   const router = useRouter()
   const [modal, setModal] = useState(false)
-  const [jenis, setJenis] = useState('')
-  const [mekanisme, setMekanisme] = useState('')
-  const [angsuran, setAngsuran] = useState('')
-  const [tanggal, setTanggal] = useState(() => tanggalLokalJakarta(7))
-  const [alasan, setAlasan] = useState('')
-  const [menyimpan, setMenyimpan] = useState(false)
   const [galat, setGalat] = useState('')
   const [konfirmasiAwal, setKonfirmasiAwal] = useState(false)
   const [pratinjau, setPratinjau] = useState(false)
@@ -90,33 +211,6 @@ export function TombolAjukanKeringanan({
   const status: StatusPengajuanKeringanan | null = terkini?.statusPersetujuan ?? null
   const bolehAjukan = !yatim && tunggakan > 0 && (!status || status === 'Ditolak')
   const judulKartu = judulPengajuanKegiatan(terkini?.jenisKegiatan)
-
-  const kirimPengajuan = async (event: FormEvent) => {
-    event.preventDefault()
-    setMenyimpan(true)
-    setGalat('')
-    const angkaAngsuran = Number(String(angsuran).replace(/\D/g, ''))
-    const hasil = await kirimPengajuanKeringanan({
-      jenisKegiatan: jenis,
-      mekanismePelunasan: mekanisme,
-      nominalAngsuran: /angsur/i.test(mekanisme) ? angkaAngsuran : 0,
-      tanggalRencanaLunas: tanggal,
-      nominalTunggakan: tunggakan,
-      alasanPengajuan: alasan.trim(),
-    })
-    setMenyimpan(false)
-    if (hasil.error) {
-      setGalat(hasil.error)
-      return
-    }
-    if (hasil.pengajuan) setLokal((sekarang) => [hasil.pengajuan!, ...sekarang])
-    setModal(false)
-    setJenis('')
-    setMekanisme('')
-    setAngsuran('')
-    setAlasan('')
-    setKonfirmasiAwal(true)
-  }
 
   const tutupKonfirmasiAwal = () => {
     setKonfirmasiAwal(false)
@@ -194,84 +288,16 @@ export function TombolAjukanKeringanan({
 
       {pratinjau && terkini ? <PratinjauSuratRekomendasi pengajuan={terkini} onTutup={() => setPratinjau(false)} /> : null}
 
-      {modal ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-card p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="text-base font-bold leading-snug text-foreground">Ajukan mengikuti kegiatan</h2>
-              <button type="button" onClick={() => setModal(false)} className="rounded-lg p-1 text-muted-foreground hover:bg-muted" aria-label="Tutup">
-                <X className="size-5" />
-              </button>
-            </div>
-            <form onSubmit={(e) => void kirimPengajuan(e)} className="mt-4 space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Total Tunggakan</p>
-                <p className="mt-1 text-2xl font-extrabold tracking-tight text-foreground">{rupiahKeringanan(tunggakan)}</p>
-              </div>
-              <label className="block text-xs font-semibold text-foreground">
-                Jenis Kegiatan / Keperluan
-                <select required value={jenis} onChange={(e) => setJenis(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm">
-                  <option value="">Pilih jenis kegiatan</option>
-                  {JENIS_KEGIATAN_PENGAJUAN.map((opsi) => (
-                    <option key={opsi} value={opsi}>
-                      {opsi}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs font-semibold text-foreground">
-                Alasan Pengajuan Rekomendasi
-                <textarea required value={alasan} onChange={(e) => setAlasan(e.target.value)} rows={3} maxLength={2000} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
-              </label>
-              <label className="block text-xs font-semibold text-foreground">
-                Tanggal Rencana Pelunasan
-                <input type="date" required value={tanggal} min={tanggalLokalJakarta()} onChange={(e) => setTanggal(e.target.value)} className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm" />
-              </label>
-              <label className="block text-xs font-semibold text-foreground">
-                Mekanisme Pelunasan
-                <select
-                  required
-                  value={mekanisme}
-                  onChange={(e) => {
-                    setMekanisme(e.target.value)
-                    if (e.target.value !== 'Mengangsur tiap bulan') setAngsuran('')
-                  }}
-                  className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
-                >
-                  <option value="">Pilih mekanisme pelunasan</option>
-                  {MEKANISME_PELUNASAN.map((opsi) => (
-                    <option key={opsi} value={opsi}>
-                      {opsi}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {mekanisme === 'Mengangsur tiap bulan' ? (
-                <label className="block text-xs font-semibold text-foreground">
-                  sebesar Rp
-                  <input
-                    inputMode="numeric"
-                    required
-                    value={angsuran}
-                    onChange={(e) => setAngsuran(e.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="Nominal angsuran tiap bulan"
-                    className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
-                  />
-                </label>
-              ) : null}
-              {galat ? <p className="text-xs text-destructive">{galat}</p> : null}
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setModal(false)} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold">
-                  Batal
-                </button>
-                <button type="submit" disabled={menyimpan} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60">
-                  {menyimpan ? 'Mengirim...' : 'Kirim pengajuan'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      <ModalAjukanKegiatan
+        buka={modal}
+        tunggakan={tunggakan}
+        onTutup={() => setModal(false)}
+        onSukses={(hasil) => {
+          if (hasil?.id) setLokal((sekarang) => [hasil, ...sekarang])
+          setModal(false)
+          setKonfirmasiAwal(true)
+        }}
+      />
     </>
   )
 }
