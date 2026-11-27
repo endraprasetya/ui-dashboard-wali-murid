@@ -10,7 +10,7 @@ const UMUR_BERHASIL = 60_000
 const UMUR_GAGAL = 20_000
 
 const PESAN_AMPSS_NONAKTIF =
-  'Integrasi AMPSS sementara dinonaktifkan sesuai instruksi yayasan. Tagihan tidak diambil dari ampss.net.'
+  'Data pembayaran dan Tagihan siswa dalam perbaikan. Mohon maaf atas ketidaknyamanan ini. Jazaakumullohu khoiron katsiron.'
 
 /** Default nonaktif; aktifkan dengan `AMPSS_NONAKTIF=0` di server. */
 function ampssNonaktif(): boolean {
