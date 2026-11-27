@@ -25,8 +25,13 @@ function teks(nilai: unknown) {
   return String(nilai ?? '').trim()
 }
 
+const cacheSiswa = new Map<string, { saat: number; siswa: SiswaUnit }>()
+const UMUR_CACHE_SISWA = 10 * 60 * 1000
+
 export async function muatSiswaUnit(idSiswa: string): Promise<SiswaUnit | null> {
   if (!isStudentId(idSiswa)) return null
+  const tersimpan = cacheSiswa.get(idSiswa)
+  if (tersimpan && Date.now() - tersimpan.saat < UMUR_CACHE_SISWA) return tersimpan.siswa
   const supabase = getSupabase()
   const denganPenanda = await supabase
     .from('siswa')
@@ -40,7 +45,7 @@ export async function muatSiswaUnit(idSiswa: string): Promise<SiswaUnit | null> 
   const data = hasil.data
   if (hasil.error || !data) return null
   const unit = unitLogin(teks(data.unit))
-  return {
+  const siswa: SiswaUnit = {
     idSiswa: teks(data.id_siswa),
     nama: teks(data.nama_siswa),
     kelas: teks(data.kelas),
@@ -48,6 +53,8 @@ export async function muatSiswaUnit(idSiswa: string): Promise<SiswaUnit | null> 
     nis: teks(data.nis),
     yatim: bacaYatim((data as { is_yatim?: unknown }).is_yatim),
   }
+  cacheSiswa.set(idSiswa, { saat: Date.now(), siswa })
+  return siswa
 }
 
 export async function siswaMilikUnit(idSiswa: string, unit: string) {

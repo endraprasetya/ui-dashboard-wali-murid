@@ -14,6 +14,8 @@ import { getSupabase } from '@/lib/supabase'
 export type { PengajuanKeringanan, StatusPengajuanKeringanan } from '@/lib/pengajuan-keringanan-tampilan'
 
 const TABEL = 'tabel_pengajuan_keringanan'
+const KOLOM_BACA =
+  'id,dibuat_pada,unit,nis,nama_siswa,kelas,nominal_tunggakan,kesanggupan_bayar,tanggal_rencana_lunas,alasan_pengajuan,jenis_kegiatan,mekanisme_pelunasan,nominal_angsuran,status_persetujuan,catatan_kepsek,catatan_keputusan,tanggal_persetujuan,diputuskan_pada,nomor_surat_rekomendasi,surat_resmi_isi,surat_resmi_dikirim_pada'
 
 const KOLOM_BALIK_INSERT =
   'id,unit,nis,nama_siswa,kelas,nominal_tunggakan,kesanggupan_bayar,tanggal_rencana_lunas,alasan_pengajuan,status_persetujuan,jenis_kegiatan,mekanisme_pelunasan,nominal_angsuran,dibuat_pada'
@@ -117,7 +119,7 @@ export async function muatPengajuanUntukNis(nis: string[]): Promise<PengajuanKer
   const supabase = getSupabase()
   let { data, error } = await supabase
     .from(TABEL)
-    .select('*')
+    .select(KOLOM_BACA)
     .in('nis', unik)
     .order('dibuat_pada', { ascending: false })
     .limit(50)

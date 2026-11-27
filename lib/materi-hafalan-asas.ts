@@ -52,7 +52,10 @@ export async function muatMateriHafalanAsas(idSiswa: string, nis: string): Promi
   }
 
   if (utama.error && /column|schema cache/i.test(galat)) {
-    const ulang = await supabase.from('materi_ujian_tahfidz').select('*').in('id_siswa', kunci)
+    const ulang = await supabase
+      .from('materi_ujian_tahfidz')
+      .select('id_siswa,asesmen,surah,ayat,keterangan,guru')
+      .in('id_siswa', kunci)
     baris = (ulang.data || []) as Record<string, unknown>[]
     galat = ulang.error?.message || ''
   }

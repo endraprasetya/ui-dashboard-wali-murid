@@ -9,6 +9,15 @@ const ASAL = 'https://www.ampss.net'
 const UMUR_BERHASIL = 60_000
 const UMUR_GAGAL = 20_000
 
+const PESAN_AMPSS_NONAKTIF =
+  'Integrasi AMPSS sementara dinonaktifkan sesuai instruksi yayasan. Tagihan tidak diambil dari ampss.net.'
+
+/** Default nonaktif; aktifkan dengan `AMPSS_NONAKTIF=0` di server. */
+function ampssNonaktif(): boolean {
+  const nilai = (process.env.AMPSS_NONAKTIF ?? '1').trim().toLowerCase()
+  return nilai !== '0' && nilai !== 'false' && nilai !== 'off' && nilai !== 'no'
+}
+
 export type HasilKeuanganAmpss = HasilParseAmpss & {
   error: string | null
   yatim?: boolean
@@ -40,6 +49,7 @@ function headerCookie(jar: Map<string, string>) {
 }
 
 async function halamanSetelahMasuk(username: string) {
+  if (ampssNonaktif()) return ''
   const jar = new Map<string, string>()
   const awal = await fetch(`${ASAL}/login`, {
     cache: 'no-store',
@@ -100,6 +110,7 @@ async function tarik(username: string): Promise<HasilKeuanganAmpss> {
 }
 
 export async function ambilKeuanganAmpss(idSiswa: string, nis = ''): Promise<HasilKeuanganAmpss> {
+  if (ampssNonaktif()) return { ...kosong, error: PESAN_AMPSS_NONAKTIF }
   if (!isStudentId(idSiswa)) return { ...kosong, error: 'Akun siswa tidak dikenali.' }
   const siswa = await muatSiswaUnit(idSiswa)
   if (!siswa) return { ...kosong, error: 'Akun siswa tidak dikenali.' }

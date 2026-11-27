@@ -54,7 +54,7 @@ function periodeDariIndeks(indeks: number, tapel: string, sekarang = new Date())
   }
 }
 
-function periodeBulanTagihan(
+export function periodeBulanTagihan(
   tapel: string,
   kode: string,
   item?: string,

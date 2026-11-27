@@ -13,6 +13,7 @@ import { UjianQiroahRiwayat } from '@/components/dashboard/ujian-qiroah-riwayat'
 import { ambilKeuanganAmpss } from '@/lib/ampss'
 import { muatPengajuanUntukNis, pengajuanTerbaru } from '@/lib/pengajuan-keringanan'
 import { muatMateriHafalanAsas } from '@/lib/materi-hafalan-asas'
+import { perluPengajuanKarenaTagihan } from '@/lib/kelayakan-asas'
 import { muatPortal } from '@/lib/muat-portal'
 import { dalamLimaHariSejakUjian } from '@/lib/ujian-rentang'
 
@@ -32,6 +33,19 @@ export default async function DashboardPage() {
       dashboard.student.idSiswa,
     ) ?? null
   const materiHafalan = await muatMateriHafalanAsas(dashboard.student.idSiswa, dashboard.student.nis)
+  const jenisKelamin = diri.data?.jenis_kelamin
+  const konteksSyarat = {
+    kelas: dashboard.student.kelas,
+    jenisKelamin,
+    tagihan: keuangan.tagihan,
+    yatim: keuangan.yatim,
+  }
+  const statusPengajuan = keringanan?.statusPersetujuan ?? null
+  const bolehAjukan =
+    !keuangan.error &&
+    keuangan.ringkas.belumTerbayar > 0 &&
+    (!statusPengajuan || statusPengajuan === 'Ditolak') &&
+    perluPengajuanKarenaTagihan(konteksSyarat)
   const hasilTerbaru = dashboard.rekapanUjian.filter((row) => dalamLimaHariSejakUjian(row.tanggal_ujian)).slice(0, 3)
   const profil = {
     nama: dashboard.student.name,
@@ -45,17 +59,16 @@ export default async function DashboardPage() {
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} />
       <GreetingHero student={dashboard.student} />
       <PengingatAsasWali />
+      <BannerKeringananWali pengajuan={keringanan} bolehAjukan={bolehAjukan} tunggakan={keuangan.ringkas.belumTerbayar} />
       <InformasiKeuanganBeranda
         error={keuangan.error}
         belumTerbayar={keuangan.ringkas.belumTerbayar}
         terbayar={keuangan.ringkas.terbayar}
         yatim={keuangan.yatim}
-        pengajuan={keringanan}
       />
       <JadwalAsasWali kelas={dashboard.student.kelas} />
       <MateriHafalanAsasWali materi={materiHafalan.materi} galat={materiHafalan.galat} />
       <SegarkanPengajuan />
-      {keringanan ? <BannerKeringananWali pengajuan={keringanan} /> : null}
       {hasilTerbaru.length > 0 ? <UjianQiroahRiwayat baris={hasilTerbaru} profil={profil} varian="beranda" /> : null}
       <UjianBanner jadwal={dashboard.jadwalUjian} />
       <BerandaRingkas data={dashboard} diri={diri} />

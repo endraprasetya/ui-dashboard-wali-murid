@@ -3,6 +3,7 @@
 import { Calendar, Link, NotebookPen } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { labelMapelGuru, todayIso } from '@/lib/format'
+import { periodeJurnalKhusus } from '@/lib/periode-jurnal'
 import type { JurnalEntry } from '@/lib/queries'
 import { DashboardCard } from './dashboard-card'
 import { ModuleMessage } from './module-message'
@@ -35,6 +36,47 @@ function nomorJam(jam: string) {
 
 function sortEntriesByJam(entries: JurnalEntry[]): JurnalEntry[] {
   return [...entries].sort((a, b) => nomorJam(a.jam) - nomorJam(b.jam))
+}
+
+function BannerPeriodeJurnal({ hariIni }: { hariIni: string }) {
+  const periode = periodeJurnalKhusus(hariIni)
+  if (periode === 'asas') {
+    return (
+      <section className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4" aria-label="Periode ujian ASAS">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
+            <NotebookPen className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Sedang berlangsung</p>
+            <h3 className="text-sm font-extrabold text-amber-950">Ujian ASAS I (23 November – 17 Desember 2026)</h3>
+            <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-800">
+              Jurnal pembelajaran disesuaikan dengan jadwal ujian dan ditandai <em>UJIAN ASAS</em>. Absensi harian murid tetap berjalan.
+            </p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+  if (periode === 'libur') {
+    return (
+      <section className="mb-4 rounded-2xl border border-sky-300 bg-sky-50 p-4" aria-label="Periode libur semester">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white">
+            <Calendar className="size-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-sky-800">Sedang berlangsung</p>
+            <h3 className="text-sm font-extrabold text-sky-950">Libur Semester 1 (21 Desember 2026 – 3 Januari 2027)</h3>
+            <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-800">
+              Kegiatan belajar serta jurnal rutin sementara libur.
+            </p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+  return null
 }
 
 function tanggalTerbaru(entries: JurnalEntry[], hariIni: string) {
@@ -72,6 +114,7 @@ export function JurnalCard({
       className={className}
       action={<RefreshButton label="Muat ulang" className="text-xs font-semibold text-primary hover:underline disabled:opacity-60" />}
     >
+      <BannerPeriodeJurnal hariIni={hariIni} />
       {error ? (
         <ModuleMessage tone="error">{error}</ModuleMessage>
       ) : entries.length === 0 ? (
