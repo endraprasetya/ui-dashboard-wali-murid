@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   GraduationCap,
   Megaphone,
+  MessageSquareWarning,
   NotebookPen,
   ShieldCheck,
   UserRound,
@@ -253,6 +254,12 @@ export function BerandaRingkas({
             {absensi.permission}, Alpha {absensi.absent}
           </p>
         )}
+      </KotakRingkas>
+
+      <KotakRingkas href="/pengaduan" judul="Layanan Aduan" ikon={MessageSquareWarning} nada="violet">
+        <p className="text-sm font-medium leading-relaxed opacity-95">
+          Sampaikan keluhan, masukan, atau laporan kegiatan sekolah.
+        </p>
       </KotakRingkas>
     </div>
   )

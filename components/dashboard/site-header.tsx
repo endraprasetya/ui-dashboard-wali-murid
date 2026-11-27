@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Tertib', href: '/tertib' },
   { label: 'Keuangan', href: '/keuangan' },
   { label: 'Pengumuman', href: '/pengumuman' },
+  { label: 'Pengaduan', href: '/pengaduan' },
 ]
 
 function labelUnit(unit: string) {

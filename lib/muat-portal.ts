@@ -30,6 +30,7 @@ export type BagianPortal =
   | 'profil'
   | 'keuangan'
   | 'pengumuman'
+  | 'pengaduan'
 
 const sukses = (hasil: { error: string | null }) => hasil.error == null
 
@@ -122,7 +123,9 @@ export async function muatPortal(bagian: BagianPortal = 'beranda'): Promise<{
   }
   if (bagian === 'jurnal') dashboard.jurnal = await getJurnal(student.kelas, student.unit)
   if (bagian === 'tertib') dashboard.tertib = await cacheBagian(id, 'tertib', () => getTertib(id, student.unit), sukses)
-  if (bagian === 'profil') diri = await cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses)
+  if (bagian === 'profil' || bagian === 'pengaduan') {
+    diri = await cacheBagian(id, 'diri', () => getDataDiriSiswa(id), sukses)
+  }
 
   return { dashboard, diri, gagal: null, notifikasi: notifikasiHasil.item }
 }

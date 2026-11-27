@@ -12,6 +12,7 @@ const NADA = {
   rose: 'border-rose-800/30 bg-rose-700 text-white shadow-rose-950/10',
   teal: 'border-teal-800/30 bg-teal-700 text-white shadow-teal-950/10',
   indigo: 'border-indigo-700/30 bg-indigo-600 text-white shadow-indigo-950/10',
+  violet: 'border-violet-700/30 bg-violet-600 text-white shadow-violet-950/10',
 } as const
 
 export type NadaKartu = keyof typeof NADA
@@ -24,6 +25,7 @@ const NADA_HOVER: Record<NadaKartu, string> = {
   rose: 'hover:bg-rose-800',
   teal: 'hover:bg-teal-800',
   indigo: 'hover:bg-indigo-700',
+  violet: 'hover:bg-violet-700',
 }
 
 export function KotakRingkas({
