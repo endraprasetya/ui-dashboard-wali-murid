@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { FormPengaduanWali } from '@/components/dashboard/form-pengaduan-wali'
+import { PengaduanWaliKonten } from '@/components/dashboard/pengaduan-wali-konten'
 import { DataBelumLengkap } from '@/components/dashboard/data-belum-lengkap'
 import { PortalGagal, PortalKerangka } from '@/components/dashboard/portal-kerangka'
 import { muatPortal } from '@/lib/muat-portal'
-import { namaWaliDariDataDiri, noWaDariDataDiri } from '@/lib/pengaduan-wali'
+import { muatRiwayatPengaduanWali, namaWaliDariDataDiri, noWaDariDataDiri } from '@/lib/pengaduan-wali'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +17,13 @@ export default async function PengaduanPage() {
 
   const namaWali = namaWaliDariDataDiri(diri.data)
   const waliDariDataDiri = namaWali.length >= 3
+  let riwayatAwal: Awaited<ReturnType<typeof muatRiwayatPengaduanWali>> = []
+  let riwayatGalat = ''
+  try {
+    riwayatAwal = await muatRiwayatPengaduanWali(dashboard.student.idSiswa)
+  } catch (cause) {
+    riwayatGalat = cause instanceof Error ? cause.message : 'Riwayat pengaduan belum dapat dimuat.'
+  }
 
   return (
     <PortalKerangka
@@ -27,7 +34,9 @@ export default async function PengaduanPage() {
       notifikasi={notifikasi}
     >
       <DataBelumLengkap kurang={diri.kurang} belumTertaut={!diri.data && !diri.error} pesan={diri.error} tautan="/profil" />
-      <FormPengaduanWali
+      <PengaduanWaliKonten
+        riwayatAwal={riwayatAwal}
+        riwayatGalatAwal={riwayatGalat}
         idSiswa={dashboard.student.idSiswa}
         namaAnak={dashboard.student.name}
         kelasAnak={dashboard.student.kelas}

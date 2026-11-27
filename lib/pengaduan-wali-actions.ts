@@ -1,8 +1,8 @@
 'use server'
 
 import { muatSiswaUnit } from '@/lib/isolasi-kueri'
-import { kirimPengaduanWaliKeDb } from '@/lib/pengaduan-wali'
-import type { TipeLampiranPengaduan } from '@/lib/pengaduan-wali-shared'
+import { kirimPengaduanWaliKeDb, muatRiwayatPengaduanWali } from '@/lib/pengaduan-wali'
+import type { PengaduanWaliRiwayatItem, TipeLampiranPengaduan } from '@/lib/pengaduan-wali-shared'
 import { getSession } from '@/lib/session'
 import { isStudentId } from '@/lib/student-id'
 
@@ -40,5 +40,22 @@ export async function kirimPengaduanWali(input: {
   } catch (cause) {
     const pesan = cause instanceof Error ? cause.message : 'Pengaduan belum dapat dikirim.'
     return { error: pesan }
+  }
+}
+
+export async function muatRiwayatPengaduanWaliAksi(): Promise<{
+  data: PengaduanWaliRiwayatItem[]
+  error: string | null
+}> {
+  const session = await getSession()
+  if (!session || !isStudentId(session.idSiswa)) {
+    return { data: [], error: 'Sesi berakhir. Silakan masuk lagi.' }
+  }
+  try {
+    const data = await muatRiwayatPengaduanWali(session.idSiswa)
+    return { data, error: null }
+  } catch (cause) {
+    const pesan = cause instanceof Error ? cause.message : 'Riwayat pengaduan belum dapat dimuat.'
+    return { data: [], error: pesan }
   }
 }

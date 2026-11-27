@@ -1,12 +1,15 @@
 import 'server-only'
 
 import type { DataDiri } from '@/lib/data-diri-shared'
+import { formatTanggalRingkas, text } from '@/lib/format'
 import {
   kanonUnitSekolah,
   KATEGORI_PENGADUAN_WALI,
   normalisasiNoWa,
   validasiNoWa,
   type KategoriPengaduanWali,
+  type PengaduanWaliRiwayatItem,
+  type StatusAlurPengaduan,
   type TipeLampiranPengaduan,
 } from '@/lib/pengaduan-wali-shared'
 import { getSupabase } from '@/lib/supabase'
@@ -69,4 +72,41 @@ export async function kirimPengaduanWaliKeDb(input: {
   }
   const { error } = await supabase.from(TABEL).insert(baris)
   if (error) throw new Error(error.message || 'Pengaduan belum dapat disimpan.')
+}
+
+const KOLOM_RIWAYAT =
+  'id,created_at,kategori,isi_pengaduan,status_alur,tindak_lanjut_jawaban,respon_penerima,ditindaklanjuti_pada,direspon_pada'
+
+function petakanRiwayat(row: Record<string, unknown>): PengaduanWaliRiwayatItem | null {
+  const id = text(row.id)
+  if (!id) return null
+  const status = text(row.status_alur) as StatusAlurPengaduan
+  if (!['masuk', 'ditangani_ks', 'diteruskan', 'selesai'].includes(status)) return null
+  const jawaban = text(row.tindak_lanjut_jawaban) || text(row.respon_penerima)
+  const tanggalTl = text(row.ditindaklanjuti_pada) || text(row.direspon_pada)
+  return {
+    id,
+    tanggalKirim: formatTanggalRingkas(row.created_at),
+    kategori: text(row.kategori) || 'Lain-lain',
+    isiPengaduan: text(row.isi_pengaduan),
+    statusAlur: status,
+    jawabanSekolah: jawaban,
+    tanggalTindakLanjut: tanggalTl ? formatTanggalRingkas(tanggalTl) : '',
+  }
+}
+
+export async function muatRiwayatPengaduanWali(idSiswa: string): Promise<PengaduanWaliRiwayatItem[]> {
+  const kunci = String(idSiswa || '').trim()
+  if (!kunci) return []
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from(TABEL)
+    .select(KOLOM_RIWAYAT)
+    .eq('id_siswa', kunci)
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error) throw new Error(error.message || 'Riwayat pengaduan belum dapat dimuat.')
+  return (data || [])
+    .map((row) => petakanRiwayat(row as Record<string, unknown>))
+    .filter((item): item is PengaduanWaliRiwayatItem => Boolean(item))
 }

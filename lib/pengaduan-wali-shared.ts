@@ -74,3 +74,21 @@ export function labelStatusAlurPengaduan(status: StatusAlurPengaduan) {
       return 'Selesai'
   }
 }
+
+export type PengaduanWaliRiwayatItem = {
+  id: string
+  tanggalKirim: string
+  kategori: string
+  isiPengaduan: string
+  statusAlur: StatusAlurPengaduan
+  jawabanSekolah: string
+  tanggalTindakLanjut: string
+}
+
+export const BATAS_RINGKAS_ISI_PENGADUAN = 160
+
+export function ringkasIsiPengaduan(isi: string, panjang = BATAS_RINGKAS_ISI_PENGADUAN) {
+  const mentah = String(isi || '').trim().replace(/\s+/g, ' ')
+  if (mentah.length <= panjang) return mentah
+  return `${mentah.slice(0, panjang).trimEnd()}…`
+}

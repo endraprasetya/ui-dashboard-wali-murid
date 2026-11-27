@@ -23,6 +23,7 @@ export function FormPengaduanWali({
   namaWaliAwal,
   waliDariDataDiri,
   noWaAwal,
+  onBerhasilKirim,
 }: {
   idSiswa: string
   namaAnak: string
@@ -30,6 +31,7 @@ export function FormPengaduanWali({
   namaWaliAwal: string
   waliDariDataDiri: boolean
   noWaAwal: string
+  onBerhasilKirim?: () => void
 }) {
   const [namaWali, setNamaWali] = useState(namaWaliAwal)
   const [noWa, setNoWa] = useState(noWaAwal)
@@ -81,6 +83,7 @@ export function FormPengaduanWali({
       setIsi('')
       setKategori('')
       setBerkas(null)
+      onBerhasilKirim?.()
     } catch (cause) {
       setGalat(cause instanceof Error ? cause.message : 'Pengaduan belum dapat dikirim.')
     } finally {
