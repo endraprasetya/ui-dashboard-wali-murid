@@ -12,9 +12,9 @@ const UMUR_GAGAL = 20_000
 const PESAN_AMPSS_NONAKTIF =
   'Data pembayaran dan Tagihan siswa dalam perbaikan. Mohon maaf atas ketidaknyamanan ini. Jazaakumullohu khoiron katsiron.'
 
-/** Default nonaktif; aktifkan dengan `AMPSS_NONAKTIF=0` di server. */
+/** Nonaktifkan sementara dengan `AMPSS_NONAKTIF=1` di server. */
 function ampssNonaktif(): boolean {
-  const nilai = (process.env.AMPSS_NONAKTIF ?? '1').trim().toLowerCase()
+  const nilai = (process.env.AMPSS_NONAKTIF ?? '0').trim().toLowerCase()
   return nilai !== '0' && nilai !== 'false' && nilai !== 'off' && nilai !== 'no'
 }
 
